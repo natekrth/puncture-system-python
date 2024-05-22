@@ -1,7 +1,6 @@
 import sys
 import os
 import numpy as np
-import pydicom
 from PyQt6.QtGui import QGuiApplication, QImage
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtQuick import QQuickWindow
@@ -13,24 +12,27 @@ class Backend(QObject):
     def __init__(self):
         super().__init__()
 
-    @pyqtSlot(str)
-    def loadDicom(self, file_path):
+    @pyqtSlot(str, int, int)
+    def loadRaw(self, file_path, width, height):
         if not os.path.exists(file_path):
-            print("Error: DICOM file does not exist.")
+            print("Error: Raw file does not exist.")
             return
         
-        dataset = pydicom.dcmread(file_path)
-        if 'PixelData' in dataset:
-            image_array = dataset.pixel_array
-            image_array = self.normalize_image(image_array)
-            image_path = self.save_image(image_array)
-            self.imageChanged.emit(image_path)
+        # Load raw image data
+        try:
+            with open(file_path, 'rb') as f:
+                raw_data = f.read()
+        except Exception as e:
+            print("Error loading raw file:", e)
+            return
 
-    def normalize_image(self, image_array):
-        # Normalize the image to 8-bit grayscale
-        image_array = image_array.astype(np.float32)
-        image_array = (np.maximum(image_array, 0) / image_array.max()) * 255.0
-        return image_array.astype(np.uint8)
+        if len(raw_data) != width * height:
+            print("Error: Dimensions mismatch.")
+            return
+
+        image_array = np.frombuffer(raw_data, dtype=np.uint8).reshape((height, width))
+        image_path = self.save_image(image_array)
+        self.imageChanged.emit(image_path)
 
     def save_image(self, image_array):
         image = QImage(image_array.data, image_array.shape[1], image_array.shape[0], image_array.strides[0], QImage.Format_Grayscale8)

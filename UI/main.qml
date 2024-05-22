@@ -6,30 +6,35 @@ ApplicationWindow {
     visible: true
     width: 800
     height: 600
-    title: "DICOM Viewer"
+    title: "Raw Image Viewer"
     property QtObject backend
 
     FileDialog {
         id: fileDialog
-        title: "Open DICOM File"
-        nameFilters: ["DICOM Files (*.dcm)"]
+        title: "Open Raw Image File"
+        nameFilters: ["Raw Files (*.raw)"]
         onAccepted: {
-            backend.loadDicom(fileDialog.fileUrl.toString().substring(8))  // Remove "file://"
+            var fileUrl = fileDialog.fileUrl
+            if (fileUrl !== null && fileUrl !== undefined) {
+                backend.loadRaw(fileUrl.toString().substring(8), 256, 256);  // Example width and height
+            } else {
+                console.log("No file selected.");
+            }
         }
     }
 
     Rectangle {
         anchors.fill: parent
-        color: "black"
+        color: "white"
 
         Image {
-            id: dicomImage
+            id: rawImage
             anchors.centerIn: parent
             fillMode: Image.PreserveAspectFit
         }
 
         Button {
-            text: "Open DICOM File"
+            text: "Open Raw Image File"
             anchors.bottom: parent.bottom
             anchors.horizontalCenter: parent.horizontalCenter
             onClicked: fileDialog.open()
@@ -38,8 +43,9 @@ ApplicationWindow {
 
     Connections {
         target: backend
-        onImageChanged: {
-            dicomImage.source = msg
+        function onImageChanged(msg) {
+            console.log("Image changed:", msg);
+            rawImage.source = msg;
         }
     }
 }
