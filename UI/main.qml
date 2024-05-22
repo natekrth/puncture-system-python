@@ -7,12 +7,9 @@ ApplicationWindow {
     x: screen.desktopAvailableWidth - width - 12
     y: screen.desktopAvailableHeight - height - 48
     title: "HelloApp"
-
     flags: Qt.FramelessWindowHint | Qt.Window
-
     property string currTime: "00:00:00"
     property QtObject backend
-
     Rectangle {
         anchors.fill: parent
         Image {
@@ -36,7 +33,6 @@ ApplicationWindow {
 
     Connections {
         target: backend
-
         function onUpdated(msg) {
             currTime = msg;
         }
