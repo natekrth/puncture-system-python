@@ -1,62 +1,65 @@
 import sys
 import os
-from time import strftime, gmtime
-import threading
-from time import sleep
-from PyQt6.QtGui import QGuiApplication
+import numpy as np
+import pydicom
+from PyQt6.QtGui import QGuiApplication, QImage
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtQuick import QQuickWindow
-from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
 class Backend(QObject):
-    updated = pyqtSignal(str, arguments=['updater'])  # Declare the signal here
+    imageChanged = pyqtSignal(str, arguments=['image_path'])
 
     def __init__(self):
         super().__init__()
 
-    def updater(self, curr_time):
-        self.updated.emit(curr_time)
+    @pyqtSlot(str)
+    def loadDicom(self, file_path):
+        if not os.path.exists(file_path):
+            print("Error: DICOM file does not exist.")
+            return
+        
+        dataset = pydicom.dcmread(file_path)
+        if 'PixelData' in dataset:
+            image_array = dataset.pixel_array
+            image_array = self.normalize_image(image_array)
+            image_path = self.save_image(image_array)
+            self.imageChanged.emit(image_path)
 
-    def bootUp(self):
-        t_thread = threading.Thread(target=self._bootUp)
-        t_thread.daemon = True
-        t_thread.start()
+    def normalize_image(self, image_array):
+        # Normalize the image to 8-bit grayscale
+        image_array = image_array.astype(np.float32)
+        image_array = (np.maximum(image_array, 0) / image_array.max()) * 255.0
+        return image_array.astype(np.uint8)
 
-    def _bootUp(self):
-        while True:
-            curr_time = strftime("%H:%M:%S", gmtime())
-            self.updater(curr_time)
-            sleep(1)  # Update every second instead of 0.1 seconds for better readability
+    def save_image(self, image_array):
+        image = QImage(image_array.data, image_array.shape[1], image_array.shape[0], image_array.strides[0], QImage.Format_Grayscale8)
+        image_path = "temp_image.png"
+        image.save(image_path)
+        return image_path
 
 QQuickWindow.setSceneGraphBackend('software')
 app = QGuiApplication(sys.argv)
 engine = QQmlApplicationEngine()
 
-# Connect the engine's quit signal to the application quit
 engine.quit.connect(app.quit)
 
-# Construct the QML file path
 qml_file = os.path.join(os.path.dirname(__file__), 'UI', 'main.qml')
 print(f"Loading QML file from: {qml_file}")
 
-# Check if the QML file exists
 if not os.path.exists(qml_file):
     print("Error: QML file does not exist.")
     sys.exit(-1)
 
-# Load the QML file
 engine.load(qml_file)
 
-# Check if the QML file was loaded successfully
 if not engine.rootObjects():
     print("Error: No root objects found. The QML file might not have been loaded correctly.")
     sys.exit(-1)
 
-# Access the root object
 root_object = engine.rootObjects()[0]
 
 back_end = Backend()
-root_object.setProperty('backend', back_end)  # Correctly set the backend property
-back_end.bootUp()
+root_object.setProperty('backend', back_end)
 
 sys.exit(app.exec())

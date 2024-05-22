@@ -1,40 +1,45 @@
 import QtQuick
-import QtQuick.Controls.Basic
+import QtQuick.Controls
+import QtQuick.Dialogs
+
 ApplicationWindow {
     visible: true
-    width: 360
+    width: 800
     height: 600
-    x: screen.desktopAvailableWidth - width - 12
-    y: screen.desktopAvailableHeight - height - 48
-    title: "HelloApp"
-    flags: Qt.FramelessWindowHint | Qt.Window
-    property string currTime: "00:00:00"
+    title: "DICOM Viewer"
     property QtObject backend
+
+    FileDialog {
+        id: fileDialog
+        title: "Open DICOM File"
+        nameFilters: ["DICOM Files (*.dcm)"]
+        onAccepted: {
+            backend.loadDicom(fileDialog.fileUrl.toString().substring(8))  // Remove "file://"
+        }
+    }
+
     Rectangle {
         anchors.fill: parent
+        color: "black"
+
         Image {
-            sourceSize.width: parent.width
-            sourceSize.height: parent.height
-            source: "./images/playas.jpg"
+            id: dicomImage
+            anchors.centerIn: parent
             fillMode: Image.PreserveAspectFit
         }
-        Text {
-            anchors {
-                bottom: parent.bottom
-                bottomMargin: 12
-                left: parent.left
-                leftMargin: 12
-            }
-            text: currTime
-            font.pixelSize: 48
-            color: "white"
+
+        Button {
+            text: "Open DICOM File"
+            anchors.bottom: parent.bottom
+            anchors.horizontalCenter: parent.horizontalCenter
+            onClicked: fileDialog.open()
         }
     }
 
     Connections {
         target: backend
-        function onUpdated(msg) {
-            currTime = msg;
+        onImageChanged: {
+            dicomImage.source = msg
         }
     }
 }
