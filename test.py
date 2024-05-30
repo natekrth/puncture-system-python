@@ -17,6 +17,15 @@ class MainPage(QMainWindow):
         self.setWindowTitle("MR_PunctureSystem")
         self.setGeometry(100, 100, 1200, 800)
 
+        # Placeholder for panel number and current slice indexes
+        self.panels = []
+        self.X = 256
+        self.Y = 256
+        self.Z = 256
+
+        self.MaxCTvalue = -32768
+        self.CT_Ajust = -1024  # Example value, adjust accordingly
+
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.layout = QHBoxLayout(self.central_widget)
@@ -34,7 +43,7 @@ class MainPage(QMainWindow):
 
         self.dataList = []
         self.selectedItem = None
-
+        
     def init_toolbar(self):
         menu_action = QAction("Menu", self)
         menu_action.triggered.connect(self.toggle_sidebar)
@@ -64,6 +73,10 @@ class MainPage(QMainWindow):
         zoom_out_action = QAction("ZoomOut", self)
         self.toolbar.addAction(zoom_out_action)
 
+        self.load_pictures_action = QAction("Load Pictures", self)
+        self.load_pictures_action.triggered.connect(self.load_pictures)
+        self.toolbar.addAction(self.load_pictures_action)
+
     def init_sidebar(self):
         self.sidebar = QWidget()
         self.sidebar.setFixedWidth(int(self.width() * 0.2))  # Set sidebar width to 2/10 of the window
@@ -82,29 +95,36 @@ class MainPage(QMainWindow):
         sliders_layout.setSpacing(10)  # Optional: adjust spacing between sliders
         sliders_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.add_slider(sliders_layout, "X Value", 512, 256, self.slider_changed)
-        self.add_slider(sliders_layout, "Y Value", 512, 256, self.slider_changed)
-        self.add_slider(sliders_layout, "Z Value", 512, 256, self.slider_changed)
-        self.add_slider(sliders_layout, "X Rotation", 180, 90, self.slider_changed)
-        self.add_slider(sliders_layout, "Y Rotation", 180, 90, self.slider_changed)
-        self.add_slider(sliders_layout, "Z Rotation", 180, 90, self.slider_changed)
+        self.add_slider(sliders_layout, "X Value", 512, 256, self.slider_changed, "X Value")
+        self.add_slider(sliders_layout, "Y Value", 512, 256, self.slider_changed, "Y Value")
+        self.add_slider(sliders_layout, "Z Value", 512, 256, self.slider_changed, "Z Value")
+        self.add_slider(sliders_layout, "X Rotation", 180, 90, self.slider_changed, "X Rotation")
+        self.add_slider(sliders_layout, "Y Rotation", 180, 90, self.slider_changed, "Y Rotation")
+        self.add_slider(sliders_layout, "Z Rotation", 180, 90, self.slider_changed, "Z Rotation")
 
         self.sidebar_layout.addWidget(sliders_frame)
         self.sidebar_layout.addStretch()  # Push sliders to the top
 
-    def add_slider(self, layout, label, maximum, initial_value, callback):
+    def add_slider(self, layout, label, maximum, initial_value, callback, object_name):
         label_widget = QLabel(label)
         layout.addWidget(label_widget)
         slider = QSlider(Qt.Horizontal)
         slider.setMaximum(maximum)
         slider.setValue(initial_value)
+        slider.setObjectName(object_name)
         slider.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         slider.valueChanged.connect(callback)
         layout.addWidget(slider)
 
     def slider_changed(self, value):
         sender = self.sender()
-        print(f"Slider changed: {value}")
+        if sender.objectName() == "X Value":
+            self.X = value
+        elif sender.objectName() == "Y Value":
+            self.Y = value
+        elif sender.objectName() == "Z Value":
+            self.Z = value
+        print(f"Slider changed: {sender.objectName()} to {value}")
 
     def init_main_view(self):
         self.main_view_container = QWidget()
@@ -113,7 +133,6 @@ class MainPage(QMainWindow):
         self.main_view_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins around the layout
         self.splitter.addWidget(self.main_view_container)
 
-        self.panels = []
         self.init_panels()
 
     def init_panels(self):
@@ -229,28 +248,87 @@ class MainPage(QMainWindow):
 
     def display_images(self, image_data):
         # Assuming the slices are along the Z-axis
-        mid_z = image_data.shape[2] // 2
-        xy_slice = image_data[:, :, mid_z]
+        xy_slice = self.make_2d_array_xy(image_data, self.Z)
+        xz_slice = self.make_2d_array_xz(image_data)
+        yz_slice = self.make_2d_array_yz(image_data)
+        rendering_slice = self.make_2d_array_rendering(image_data)
 
-        mid_y = image_data.shape[1] // 2
-        xz_slice = image_data[:, mid_y, :]
-
-        mid_x = image_data.shape[0] // 2
-        yz_slice = image_data[mid_x, :, :]
-
-        self.update_panel_image(self.panels[0], xy_slice)  # 3D view placeholder
+        self.update_panel_image(self.panels[0], rendering_slice)  # 3D view placeholder
         self.update_panel_image(self.panels[1], xy_slice)
         self.update_panel_image(self.panels[2], yz_slice)
         self.update_panel_image(self.panels[3], xz_slice)
 
     def update_panel_image(self, panel, image_data):
-        image_data = ((image_data - image_data.min()) / (image_data.max() - image_data.min()) * 255).astype(np.uint8)
-        height, width = image_data.shape
-        image = QImage(image_data.data, width, height, QImage.Format_Grayscale8)
+        image = self.make_2d_image(image_data)
         pixmap = QPixmap.fromImage(image)
 
         panel.scene.clear()
         panel.scene.addPixmap(pixmap)
+
+    def load_pictures(self):
+        if self.selectedItem is None:
+            return
+        self.display_images(self.selectedItem.image_data)
+
+    def make_2d_array_yz(self, Im):  # Y-Z plane
+        vs = np.zeros((512, 512), dtype=np.int16)
+        z_size = Im.shape[2]
+        for j in range(512):
+            for k in range(min(512, z_size)):
+                kk = abs(k - z_size) - 1
+                vs[j, kk] = Im[self.X, j, k]
+        return vs
+
+    def make_2d_array_xz(self, Im):  # X-Z plane
+        vs = np.zeros((512, 512), dtype=np.int16)
+        z_size = Im.shape[2]
+        for i in range(512):
+            for k in range(min(512, z_size)):
+                kk = abs(k - z_size) - 1
+                vs[i, kk] = Im[i, self.Y, k]
+        return vs
+
+    def make_2d_array_xy(self, Im, z):  # X-Y plane
+        vs = np.zeros((512, 512), dtype=np.int16)
+        z_size = Im.shape[2]
+        ZZ = abs(z - z_size) - 1
+        if ZZ >= z_size:  # Ensure ZZ is within bounds
+            ZZ = z_size - 1
+        for i in range(512):
+            for j in range(512):
+                vs[i, j] = Im[i, j, ZZ]
+        return vs
+
+    def make_2d_array_rendering(self, Im):  # Maximum intensity projection
+        vs = np.zeros((512, 512), dtype=np.int16)
+        z_size = Im.shape[2]
+        for i in range(512):
+            for j in range(512):
+                vs[i, j] = self.max_intensity(Im, i, j, z_size)
+        return vs
+
+    def max_intensity(self, v, I, J, z_size):
+        M = self.CT_Ajust
+        for k in range(z_size):
+            _M = v[I, J, k]
+            if _M > M:
+                M = _M
+                if M == self.MaxCTvalue:
+                    return M
+        return M
+
+    def make_2d_image(self, image_2d):  # Create QImage from 2D array
+        image_2d = ((image_2d - image_2d.min()) / (image_2d.max() - image_2d.min()) * 255).astype(np.uint8)
+        image_2d = np.rot90(image_2d, k=-1)  # Rotate image by 90 degrees clockwise
+        height, width = image_2d.shape
+        image_2d_bytes = image_2d.tobytes()
+        image = QImage(image_2d_bytes, width, height, QImage.Format_Grayscale8)
+        return image
+
+    def noise_reduction(self, s):  # Convert CT value to pixel value
+        s = self.CT_Ajust if s <= self.CT_Ajust else s
+        pixel = (s - self.CT_Ajust) * 255 / (self.MaxCTvalue - self.CT_Ajust)
+        return np.uint8(pixel)
 
     def show_add_menu(self):
         print("Show add menu")
