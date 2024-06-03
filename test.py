@@ -2,8 +2,8 @@ import sys
 import os
 import numpy as np
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QToolBar, QAction, QWidget, QSlider, QLabel, QSplitter, QGraphicsView, QGraphicsScene, QHBoxLayout, QGridLayout, QSizePolicy, QMenu, QFileDialog, QListWidget, QListWidgetItem, QGraphicsPixmapItem
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QColor, QPixmap, QImage
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QFont, QColor, QPixmap, QImage, QPainter
 
 class PictureInfo:
     def __init__(self, file_name):
@@ -23,8 +23,8 @@ class MainPage(QMainWindow):
         self.Y = 256
         self.Z = 256
 
-        self.MaxCTvalue = -32768
-        self.CT_Ajust = -1024  # Example value, adjust accordingly
+        self.MaxCTvalue = 0
+        self.CT_Ajust = -1000  # Example value, adjust accordingly
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -160,13 +160,16 @@ class MainPage(QMainWindow):
         view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        view.setRenderHint(QPainter.Antialiasing)
+        view.setRenderHint(QPainter.SmoothPixmapTransform)
         layout.addWidget(view)
 
         label = QLabel(label_text)
         label.setAlignment(Qt.AlignCenter)
-        label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        scene.addWidget(label)
+        label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout.addWidget(label)
 
+        panel.setLayout(layout)
         panel.scene = scene
         panel.view = view
         return panel
@@ -197,6 +200,41 @@ class MainPage(QMainWindow):
         # Show the menu under the "File" action
         file_menu.exec_(self.toolbar.mapToGlobal(self.toolbar.actionGeometry(self.toolbar.actions()[1]).bottomLeft()))
 
+    # def input_button_click(self):
+    #     options = QFileDialog.Options()
+    #     options |= QFileDialog.ReadOnly
+    #     file, _ = QFileDialog.getOpenFileName(self, "Select a RAW file", "", "RAW Files (*.raw);;All Files (*)", options=options)
+    #     if not file:
+    #         return
+
+    #     with open(file, 'rb') as f:
+    #         buffer = f.read()
+
+    #     bytes_array = np.frombuffer(buffer, dtype=np.uint8)
+    #     z_size = len(buffer) // (512 * 512 * 2)
+    #     image_data = np.zeros((512, 512, z_size), dtype=np.int16)
+
+    #     max_ct_value = -32768
+    #     for k in range(z_size):
+    #         for j in range(512):
+    #             for i in range(512):
+    #                 idx = k * 512 * 512 * 2 + j * 512 * 2 + i * 2
+    #                 s = int(bytes_array[idx]) * 256 + int(bytes_array[idx + 1])
+    #                 if s > 32767:
+    #                     s -= 65536
+    #                 max_ct_value = max(max_ct_value, s)
+    #                 image_data[i, j, k] = s
+
+    #     picture_info = PictureInfo(file)
+    #     picture_info.image_data = image_data
+    #     self.dataList.append(picture_info)
+
+    #     item = QListWidgetItem(os.path.basename(file))  # Display only the file name
+    #     self.list_view.addItem(item)
+
+    #     print("File loaded:", os.path.basename(file))
+    #     print("Image data shape:", image_data.shape)
+
     def input_button_click(self):
         options = QFileDialog.Options()
         options |= QFileDialog.ReadOnly
@@ -211,18 +249,40 @@ class MainPage(QMainWindow):
         z_size = len(buffer) // (512 * 512 * 2)
         image_data = np.zeros((512, 512, z_size), dtype=np.int16)
 
-        max_ct_value = -32768
-        for k in range(z_size):
-            for j in range(512):
-                for i in range(512):
-                    idx = k * 512 * 512 * 2 + j * 512 * 2 + i * 2
-                    s = int(bytes_array[idx]) * 256 + int(bytes_array[idx + 1])
-                    if s > 32767:
-                        s -= 65536
-                    max_ct_value = max(max_ct_value, s)
-                    image_data[i, j, k] = s
+        y_end = 512  # Initializing y_end
+        gap1, gap2, gap3, gap4, gap5 = 0, 0, 0, 0, 0  # Initializing gap values
+        max_ct_value = 0
+        ct_adjust = -1000  # Example value, adjust accordingly
 
-        picture_info = PictureInfo(file)
+        for k in range(z_size):
+            kk = 512 * 512 * 2 * k
+            for j in range(512):
+                jj = 512 * 2 * j
+                if j < y_end:
+                    for i in range(512):
+                        bytes_num = kk + jj + 2 * i
+                        # s = int(bytes_array[bytes_num]) * 256 + int(bytes_array[bytes_num + 1])
+                        s = np.int16(bytes_array[bytes_num] * 256 + bytes_array[bytes_num + 1])
+                        # s = (bytes_array[bytes_num] * 256 + bytes_array[bytes_num + 1]) & 0xFFFF
+                        if s > -600:
+                            gap1 += 1
+                        else:
+                            gap1 += 0
+                        if s > max_ct_value:
+                            max_ct_value = s
+                        else:
+                            max_ct_value = max_ct_value
+                        image_data[i, j, k] = s
+                    if k == 0 and gap1 < 100 and gap3 > 300 and gap5 < 200 and j < y_end:
+                        y_end = j - 5
+                        j = y_end
+                        break  # Exit the loop early to update y_end
+                    gap5, gap4, gap3, gap2, gap1 = gap4, gap3, gap2, gap1, 0
+                else:
+                    for i in range(512):
+                        image_data[i, j, k] = ct_adjust
+
+        picture_info = PictureInfo(os.path.basename(file))
         picture_info.image_data = image_data
         self.dataList.append(picture_info)
 
@@ -232,6 +292,13 @@ class MainPage(QMainWindow):
         print("File loaded:", os.path.basename(file))
         print("Image data shape:", image_data.shape)
 
+        # Updating the file button and menu toggle button states
+        # file_action = self.toolbar.actions()[self.toolbar.actions().index(self.load_action)]
+        # file_action.setChecked(False)
+        # menu_action = self.toolbar.actions()[self.toolbar.actions().index(self.menu_action)]
+        # menu_action.setChecked(True)
+        # menu_action.setBackground(Qt.green)
+        
     def list_view_item_click(self, item):
         for pic_info in self.dataList:
             if os.path.basename(pic_info.file_name) == item.text():
@@ -243,27 +310,30 @@ class MainPage(QMainWindow):
             center_point = {'x': x_size // 2, 'y': y_size // 2, 'z': z_size // 2}
             print(f"Selected Item: {os.path.basename(self.selectedItem.file_name)}")
             print(f"Center Point: {center_point}")
-
+            print(f"Image data: {self.selectedItem.image_data}")
             self.display_images(self.selectedItem.image_data)
 
     def display_images(self, image_data):
         # Assuming the slices are along the Z-axis
         xy_slice = self.make_2d_array_xy(image_data, self.Z)
+        xy_slice_bitmap = self.make_2d_image(xy_slice)
         xz_slice = self.make_2d_array_xz(image_data)
+        xz_slice_bitmap = self.make_2d_image(xz_slice)
         yz_slice = self.make_2d_array_yz(image_data)
+        yz_slice_bitmap = self.make_2d_image(yz_slice)
         rendering_slice = self.make_2d_array_rendering(image_data)
+        rendering_slice_bitmap = self.make_2d_image(rendering_slice)
 
-        self.update_panel_image(self.panels[0], rendering_slice)  # 3D view placeholder
-        self.update_panel_image(self.panels[1], xy_slice)
-        self.update_panel_image(self.panels[2], yz_slice)
-        self.update_panel_image(self.panels[3], xz_slice)
+        self.update_panel_image(self.panels[0], rendering_slice_bitmap)  # 3D view placeholder
+        self.update_panel_image(self.panels[1], xy_slice_bitmap)
+        self.update_panel_image(self.panels[2], yz_slice_bitmap)
+        self.update_panel_image(self.panels[3], xz_slice_bitmap)
 
-    def update_panel_image(self, panel, image_data):
-        image = self.make_2d_image(image_data)
+    def update_panel_image(self, panel, image):
         pixmap = QPixmap.fromImage(image)
-
         panel.scene.clear()
         panel.scene.addPixmap(pixmap)
+        panel.view.fitInView(panel.scene.sceneRect(), Qt.KeepAspectRatio)  # Fit the image to the view
 
     def load_pictures(self):
         if self.selectedItem is None:
@@ -291,7 +361,7 @@ class MainPage(QMainWindow):
     def make_2d_array_xy(self, Im, z):  # X-Y plane
         vs = np.zeros((512, 512), dtype=np.int16)
         z_size = Im.shape[2]
-        ZZ = abs(z - z_size) - 1
+        ZZ = abs(z - 512) - 1
         if ZZ >= z_size:  # Ensure ZZ is within bounds
             ZZ = z_size - 1
         for i in range(512):
@@ -332,6 +402,11 @@ class MainPage(QMainWindow):
 
     def show_add_menu(self):
         print("Show add menu")
+
+    def image_update(self):
+        if self.selectedItem is None:
+            return
+        self.display_images(self.selectedItem.image_data)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
