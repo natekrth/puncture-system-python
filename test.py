@@ -133,7 +133,7 @@ class MainPage(QMainWindow):
         sliders_layout.setSpacing(10)  # Optional: adjust spacing between sliders
         sliders_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.add_slider(sliders_layout, "X Value", 512, 256, self.slider_changed, "X Value")
+        self.add_slider(sliders_layout, "X Value", 170, 0, self.slider_changed, "X Value")
         self.add_slider(sliders_layout, "Y Value", 512, 256, self.slider_changed, "Y Value")
         self.add_slider(sliders_layout, "Z Value", 512, 256, self.slider_changed, "Z Value")
         self.add_slider(sliders_layout, "X Rotation", 180, 90, self.slider_changed, "X Rotation")
@@ -157,11 +157,11 @@ class MainPage(QMainWindow):
     def slider_changed(self, value):
         sender = self.sender()
         if sender.objectName() == "X Value":
-            self.X = value
-        elif sender.objectName() == "Y Value":
-            self.Y = value
-        elif sender.objectName() == "Z Value":
             self.Z = value
+        elif sender.objectName() == "Y Value":
+            self.X = value
+        elif sender.objectName() == "Z Value":
+            self.Y = value
         self.update_images()
         print(f"Slider changed: {sender.objectName()} to {value}")
 
@@ -322,7 +322,7 @@ class MainPage(QMainWindow):
         if num == 1:  # Axial view
             image_2d = self.volume3d[:, :, self.Z]
         elif num == 2:  # Sagittal view
-            image_2d = np.rot90(self.volume3d[:, self.Y, :], k=1)
+            image_2d = np.rot90(self.volume3d[:, self.Y, :], k=3)
         elif num == 3:  # Coronal view
             image_2d = np.rot90(self.volume3d[self.X, :, :])
         else:
@@ -348,7 +348,7 @@ class MainPage(QMainWindow):
         return image
 
     def load_dicom_images(self):
-        path = "./pB"
+        path = "./pA"
         ct_images = os.listdir(path)
 
         slices = [dicom.read_file(path + '/' + s, force=True) for s in ct_images]
