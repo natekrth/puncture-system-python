@@ -1,10 +1,10 @@
 import sys
 import os
 import numpy as np
+import pydicom as dicom
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QToolBar, QAction, QWidget, QSlider, QLabel, QSplitter, QGraphicsView, QGraphicsScene, QHBoxLayout, QGridLayout, QSizePolicy, QMenu, QFileDialog, QListWidget, QListWidgetItem
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QImage, QPixmap, QColor
-from concurrent.futures import ThreadPoolExecutor
+from PyQt5.QtGui import QImage, QPixmap
 
 class Vector3D:
     def __init__(self, x, y, z):
@@ -12,6 +12,18 @@ class Vector3D:
         self.y = y
         self.z = z
 
+class Matrix3D:
+    def __init__(self, x1=0, x2=0, x3=0, y1=0, y2=0, y3=0, z1=0, z2=0, z3=0):
+        self.x1 = x1
+        self.x2 = x2
+        self.x3 = x3
+        self.y1 = y1
+        self.y2 = y2
+        self.y3 = y3
+        self.z1 = z1
+        self.z2 = z2
+        self.z3 = z3
+        
 class PictureInfo:
     def __init__(self, file_name):
         self.file_name = file_name
@@ -34,17 +46,21 @@ class MainPage(QMainWindow):
         self.y_size = 0
         self.z_size = 0
         
+        self.thetaX = 0
+        self.thetaY = 0
+        self.thetaZ = 0
+        
         self.CenterPoint = Vector3D(0, 0, 0)
         
         self.NeedleMatrix3D = np.zeros((512, 512, 512), dtype=np.int16)
         self.NowMatrix3D = np.zeros((512, 512, 512), dtype=np.int16)
         
-        self.IsSelectedItem = 0;   
+        self.IsSelectedItem = 0   
         self.y_end = 512
         self.ImageStride = 512 * 2
-        self.ImagePixelSize = 512 * 512 *2
+        self.ImagePixelSize = 512 * 512 * 2
         self.MaxCTvalue = 0
-        self.CT_Ajust = -1000 # Example value, adjust accordingly
+        self.CT_Ajust = -1000  # Example value, adjust accordingly
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -63,6 +79,8 @@ class MainPage(QMainWindow):
 
         self.dataList = []
         self.selectedItem = None
+
+        self.load_dicom_images()  # Load the DICOM images
         
     def init_toolbar(self):
         menu_action = QAction("Menu", self)
@@ -158,10 +176,10 @@ class MainPage(QMainWindow):
 
     def init_panels(self):
         # Add panels to the grid layout
-        panel1 = self.create_panel("3D")
-        panel2 = self.create_panel("XY-Plane")
-        panel3 = self.create_panel("YZ-Plane")
-        panel4 = self.create_panel("XZ-Plane")
+        panel1 = self.create_panel("Axial")
+        panel2 = self.create_panel("Sagittal")
+        panel3 = self.create_panel("Coronal")
+        panel4 = self.create_panel("3D")  # Placeholder for 3D view if needed
 
         self.main_view_layout.addWidget(panel1, 0, 0)
         self.main_view_layout.addWidget(panel2, 0, 1)
@@ -273,7 +291,7 @@ class MainPage(QMainWindow):
         # Print debug information
         print("File loaded:", os.path.basename(file))
         print("Image data shape:", image_data.shape)
-        print("Picture Info",picture_info)
+        print("Picture Info", picture_info)
         print(image_data)
 
     def list_view_item_click(self, item):
@@ -284,192 +302,86 @@ class MainPage(QMainWindow):
 
         if self.selectedItem:
             self.x_size, self.y_size, self.z_size = self.selectedItem.image_data.shape
-            center_point = {'x': self.x_size / 2, 'y': self.y_size / 2, 'z': self.z_size / 2}
+            self.CenterPoint.x = self.x_size / 2
+            self.CenterPoint.y = self.y_size / 2
+            self.CenterPoint.z = self.z_size / 2 
             self.IsSelectedItem = 1
             print(f"Selected Item: {os.path.basename(self.selectedItem.file_name)}")
-            print(f"Center Point: {center_point}")
-
-            # self.display_images(self.selectedItem.image_data)
+            self.update_images()
 
     def btnLoadPictures_Click(self):
-        if self.IsSelectedItem == 0:
-            return
+        # if self.IsSelectedItem == 0:
+        #     return
         for num, pa in enumerate(self.panels):
             self.load_panel_image(pa, num)
-        # Reset the color of the load button
-        # self.app_bar_load.setStyleSheet("")  # Reset to default style
-        
+
     def load_panel_image(self, pa, num):
-        if self.IsSelectedItem == 0:
-            return
+        # if self.IsSelectedItem == 0:
+        #     return
         
-        image_2d = np.zeros((512, 512), dtype=np.int16)
-        # make_3d_array(self.selected_item.image_data)
-        print(pa)
-        print(num)
-        
-        if num == 0:  # 任意断面　軸位断面 : XY 平面
-            image_2d = self.make_2d_array_xy(self.NowMatrix3D, self.Z)
-        elif num == 1:  # 任意断面　矢状断面 : YZ 平面
-            image_2d = self.make_2d_array_yz(self.NowMatrix3D)
-        elif num == 2:  # 任意断面　冠状断面 : XZ 平面
-            image_2d = self.make_2d_array_xz(self.NowMatrix3D)
-        elif num == 3:  # 立体構造
-            image_2d = self.make_2d_array_rendering(self.NowMatrix3D)
-        elif num == 4:  # 経路表示画面　クリック時点のXY平面表示
-            image_2d = self.make_2d_array_xy(self.NowMatrix3D, self.Z)
+        if num == 1:  # Axial view
+            image_2d = self.volume3d[:, :, self.Z]
+        elif num == 2:  # Sagittal view
+            image_2d = np.rot90(self.volume3d[:, self.Y, :], k=1)
+        elif num == 3:  # Coronal view
+            image_2d = np.rot90(self.volume3d[self.X, :, :])
         else:
-            image_2d.fill(255)
-
-        # software_bitmap = self.make_2d_image(image_2d)
+            image_2d = np.zeros((512, 512), dtype=np.int16)  # Placeholder for the 3D view
         self.update_panel_image(pa, image_2d)
-        # pa.set_soft_image(software_bitmap)
-
-        
-    # def display_images(self, image_data):
-    #     # Assuming the slices are along the Z-axis
-    #     xy_slice = self.make_2d_array_xy(image_data, self.Z)
-    #     xz_slice = self.make_2d_array_xz(image_data)
-    #     yz_slice = self.make_2d_array_yz(image_data)
-    #     rendering_slice = self.make_2d_array_rendering(image_data)
-
-    #     self.update_panel_image(self.panels[0], rendering_slice)  # 3D view placeholder
-    #     self.update_panel_image(self.panels[1], xy_slice)
-    #     self.update_panel_image(self.panels[2], yz_slice)
-    #     self.update_panel_image(self.panels[3], xz_slice)
 
     def update_panel_image(self, panel, image_data):
         image = self.make_2d_image(image_data)
         pixmap = QPixmap.fromImage(image)
-
         panel.scene.clear()
         panel.scene.addPixmap(pixmap)
 
     def load_pictures(self):
-        if self.selectedItem is None:
-            return
+        # if self.selectedItem is None:
+        #     return
         self.display_images(self.selectedItem.image_data)
 
-    def make_2d_array_yz(self, Im):  # Y-Z plane
-        vs = np.zeros((512, 512), dtype=np.int16)
-        for j in range(512):
-            for k in range(512):
-                kk = abs(k - 512) - 1
-                vs[j, kk] = Im[self.X, j, k]
-        return vs
-
-    def make_2d_array_xz(self, Im):  # X-Z plane
-        vs = np.zeros((512, 512), dtype=np.int16)
-        for i in range(512):
-            for k in range(512):
-                kk = abs(k - 512) - 1
-                vs[i, kk] = Im[i, self.Y, k]
-        return vs
-
-    def make_2d_array_xy(self, Im, z):  # X-Y plane
-        vs = np.zeros((512, 512), dtype=np.int16)
-        ZZ = abs(z - 512) - 1
-        for i in range(512):
-            for j in range(512):
-                vs[i, j] = Im[i, j, ZZ]
-        return vs
-
-    def make_2d_array_rendering(self, Im):  # Maximum intensity projection
-        vs = np.zeros((self.x_size, self.y_size), dtype=np.int16)
-        for i in range(self.x_size):
-            for j in range(self.y_size, 16):
-                vs[i, j] = self.max_intensity(Im, i, j)
-                vs[i, j + 1] = self.max_intensity(Im, i, j + 1)
-                vs[i, j + 2] = self.max_intensity(Im, i, j + 2)
-                vs[i, j + 3] = self.max_intensity(Im, i, j + 3)
-                
-                vs[i, j + 4] = self.max_intensity(Im, i, j + 4)
-                vs[i, j + 5] = self.max_intensity(Im, i, j + 5)
-                vs[i, j + 6] = self.max_intensity(Im, i, j + 6)
-                vs[i, j + 7] = self.max_intensity(Im, i, j + 7)
-                
-                vs[i, j + 8] = self.max_intensity(Im, i, j + 8)
-                vs[i, j + 9] = self.max_intensity(Im, i, j + 9)
-                vs[i, j + 10] = self.max_intensity(Im, i, j + 10)
-                vs[i, j + 11] = self.max_intensity(Im, i, j + 11)
-                
-                vs[i, j + 12] = self.max_intensity(Im, i, j + 12)
-                vs[i, j + 13] = self.max_intensity(Im, i, j + 13)
-                vs[i, j + 14] = self.max_intensity(Im, i, j + 14)
-                vs[i, j + 15] = self.max_intensity(Im, i, j + 15)
-        return vs
-
-    def max_intensity(self, v, I, J, z_size=512):
-        M = self.CT_Ajust
-        for k in range(z_size):
-            _M = v[I, J, k]
-            if _M > M:
-                M = _M
-                if M == self.MaxCTvalue:
-                    return M
-        return M
-        
-    # def make_2d_image(self, image_2d):
-    #     image_size = 512
-    #     qimage = QImage(image_size, image_size, QImage.Format_Grayscale8)
-
-    #     for i in range(image_size):
-    #         for j in range(image_size):
-    #             value = np.clip(self.noise_reduction(image_2d[i, j]), 0, 255)
-    #             qimage.setPixel(i, j, QColor(value, value, value).rgb())
-    #     return qimage
-    
     def make_2d_image(self, image_2d):
-        image_size = 512
-        qimage = QImage(image_size, image_size, QImage.Format_Grayscale8)
+        image_2d = ((image_2d - image_2d.min()) / (image_2d.max() - image_2d.min()) * 255).astype(np.uint8)
+        height, width = image_2d.shape
+        image_2d_bytes = image_2d.tobytes()
+        image = QImage(image_2d_bytes, width, height, QImage.Format_Grayscale8)
+        return image
 
-        for i in range(image_size):
-            for j in range(image_size):
-                value = np.clip(self.noise_reduction(image_2d[i, j]), 0, 255)
-                qimage.setPixel(i, j, int(value)) 
-        return qimage
-    # def make_2d_image(self, image_2d):  # Create QImage from 2D array
-    #     image_2d = ((image_2d - image_2d.min()) / (image_2d.max() - image_2d.min()) * 255).astype(np.uint8)
-    #     image_2d = np.rot90(image_2d, k=3)  # Rotate image by 270 degrees clockwise
-    #     height, width = image_2d.shape
-    #     image_2d_bytes = image_2d.tobytes()
-    #     image = QImage(image_2d_bytes, width, height, QImage.Format_Grayscale8)
-    #     return image
+    def load_dicom_images(self):
+        path = "./pB"
+        ct_images = os.listdir(path)
 
-    def make_z_rotation_matrix(theta):
-        return np.array([
-            [np.cos(theta), -np.sin(theta), 0],
-            [np.sin(theta), np.cos(theta), 0],
-            [0, 0, 1]
-        ])
+        slices = [dicom.read_file(path + '/' + s, force=True) for s in ct_images]
+        slices = sorted(slices, key=lambda x: x.ImagePositionPatient[2], reverse=True)
 
-    def make_x_rotation_matrix(theta):
-        return np.array([
-            [1, 0, 0],
-            [0, np.cos(theta), -np.sin(theta)],
-            [0, np.sin(theta), np.cos(theta)]
-        ])
+        pixel_spacing = slices[0].PixelSpacing
+        slices_thickness = slices[0].SliceThickness
 
-    def make_y_rotation_matrix(theta):
-        return np.array([
-            [np.cos(theta), 0, np.sin(theta)],
-            [0, 1, 0],
-            [-np.sin(theta), 0, np.cos(theta)]
-        ])
+        axial_aspect_ratio = pixel_spacing[1] / pixel_spacing[0]
+        sagittal_aspect_ratio = pixel_spacing[1] / slices_thickness
+        coronal_aspect_ratio = slices_thickness / pixel_spacing[0]
 
-    def calculation_matrix3x3(mat1, mat2):
-        return np.dot(mat1, mat2)
+        img_shape = list(slices[0].pixel_array.shape)
+        img_shape.append(len(slices))
+        self.volume3d = np.zeros(img_shape)
 
-    def calculation_matrix3x1(matrix3x3, vector3x1):
-        return np.dot(matrix3x3, vector3x1)
+        for i, s in enumerate(slices):
+            array2D = s.pixel_array
+            self.volume3d[:, :, i] = array2D
 
-    def noise_reduction(self, s):  # Convert CT value to pixel value
-        s = self.CT_Ajust if s <= self.CT_Ajust else s
-        pixel = (s - self.CT_Ajust) * 255 / (self.MaxCTvalue - self.CT_Ajust)
-        return np.uint8(pixel)
+        self.X = img_shape[0] // 2
+        self.Y = img_shape[1] // 2
+        self.Z = img_shape[2] // 2
 
     def show_add_menu(self):
         print("Show add menu")
+
+    def update_images(self):
+        # if not self.selectedItem:
+        #     return
+
+        for num, pa in enumerate(self.panels):
+            self.load_panel_image(pa, num)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
