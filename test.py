@@ -323,9 +323,9 @@ class MainPage(QMainWindow):
         if num == 1:  # Axial view
             image_2d = self.volume3d[:, :, self.Z]
         elif num == 2:  # Sagittal view
-            image_2d = np.rot90(self.volume3d[:, self.Y, :], k=3)
+            image_2d = np.flipud((np.rot90(self.volume3d[:, self.Y, :], k=1)))
         elif num == 3:  # Coronal view
-            image_2d = np.rot90(self.volume3d[self.X, :, :])
+            image_2d = np.flipud(np.rot90(self.volume3d[self.X, :, :]))
         else:
             image_2d = np.zeros((512, 512), dtype=np.int16)  # Placeholder for the 3D view
         self.update_panel_image(pa, image_2d)
@@ -363,7 +363,6 @@ class MainPage(QMainWindow):
         path = "./pA"
         ct_images = os.listdir(path)
         slices = [dicom.read_file(path + '/' + s, force=True) for s in ct_images]
-        print(slices)
         slices = sorted(slices, key=lambda x: x.ImagePositionPatient[2], reverse=True)
 
         pixel_spacing = slices[0].PixelSpacing
