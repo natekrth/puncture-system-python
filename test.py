@@ -4,7 +4,7 @@ import numpy as np
 import pydicom as dicom
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QToolBar, QAction, QWidget, QSlider, QLabel, QSplitter, QGraphicsView, QGraphicsScene, QHBoxLayout, QGridLayout, QSizePolicy, QMenu, QFileDialog, QListWidget, QListWidgetItem
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtGui import QImage, QPixmap, QColor
 
 class Vector3D:
     def __init__(self, x, y, z):
@@ -196,6 +196,7 @@ class MainPage(QMainWindow):
 
         scene = QGraphicsScene()
         view = QGraphicsView(scene)
+        view.setBackgroundBrush(QColor(Qt.black))  # Set the background to black
         view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -341,18 +342,29 @@ class MainPage(QMainWindow):
         self.display_images(self.selectedItem.image_data)
 
     def make_2d_image(self, image_2d):
-        image_2d = ((image_2d - image_2d.min()) / (image_2d.max() - image_2d.min()) * 255).astype(np.uint8)
-        height, width = image_2d.shape
-        image_2d_bytes = image_2d.tobytes()
+        # Normalize the image data
+        normalized_image = ((image_2d - image_2d.min()) / (image_2d.max() - image_2d.min()) * 255).astype(np.uint8)
+        
+        # Set the background to black where pixel values are above a certain threshold (e.g., 250)
+        threshold = 250
+        background_mask = normalized_image > threshold
+        normalized_image[background_mask] = 0
+        
+        # Create QImage
+        height, width = normalized_image.shape
+        image_2d_bytes = normalized_image.tobytes()
         image = QImage(image_2d_bytes, width, height, QImage.Format_Grayscale8)
         return image
+
+    def get_image_position(self, slice):
+        return slice.ImagePositionPatient[2]
 
     def load_dicom_images(self):
         path = "./pA"
         ct_images = os.listdir(path)
 
         slices = [dicom.read_file(path + '/' + s, force=True) for s in ct_images]
-        slices = sorted(slices, key=lambda x: x.ImagePositionPatient[2], reverse=True)
+        slices = sorted(slices, key=self.get_image_position, reverse=True)
 
         pixel_spacing = slices[0].PixelSpacing
         slices_thickness = slices[0].SliceThickness
