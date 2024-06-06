@@ -2,6 +2,7 @@ import sys
 import os
 import numpy as np
 import pydicom as dicom
+from pydicom import dcmread
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QToolBar, QAction, QWidget, QSlider, QLabel, QSplitter, QGraphicsView, QGraphicsScene, QHBoxLayout, QGridLayout, QSizePolicy, QMenu, QFileDialog, QListWidget, QListWidgetItem
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap, QColor
@@ -356,15 +357,15 @@ class MainPage(QMainWindow):
         image = QImage(image_2d_bytes, width, height, QImage.Format_Grayscale8)
         return image
 
-    def get_image_position(self, slice):
+    def get_image_position(slice):
         return slice.ImagePositionPatient[2]
 
     def load_dicom_images(self):
         path = "./pA"
         ct_images = os.listdir(path)
-
-        slices = [dicom.read_file(path + '/' + s, force=True) for s in ct_images]
-        slices = sorted(slices, key=self.get_image_position, reverse=True)
+        slices = [dcmread(path + '/' + s, force=True) for s in ct_images]
+        print(slices)
+        slices = sorted(slices, key=lambda x: x.ImagePositionPatient[2], reverse=True)
 
         pixel_spacing = slices[0].PixelSpacing
         slices_thickness = slices[0].SliceThickness
