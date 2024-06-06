@@ -106,9 +106,11 @@ class MainPage(QMainWindow):
         self.toolbar.addAction(exchange_action)
 
         zoom_in_action = QAction("ZoomIn", self)
+        zoom_in_action.triggered.connect(self.zoom_in)
         self.toolbar.addAction(zoom_in_action)
 
         zoom_out_action = QAction("ZoomOut", self)
+        zoom_out_action.triggered.connect(self.zoom_out)
         self.toolbar.addAction(zoom_out_action)
 
         self.load_pictures_action = QAction("Load Pictures", self)
@@ -209,6 +211,7 @@ class MainPage(QMainWindow):
 
         panel.scene = scene
         panel.view = view
+        panel.scale_factor = 1.0  # Add a scale factor attribute to the panel
         return panel
 
     def toggle_sidebar(self):
@@ -323,7 +326,7 @@ class MainPage(QMainWindow):
         if num == 1:  # Axial view
             image_2d = self.volume3d[:, :, self.Z]
         elif num == 2:  # Sagittal view
-            image_2d = np.flipud((np.rot90(self.volume3d[:, self.Y, :], k=1)))
+            image_2d = np.rot90(self.volume3d[:, self.Y, :], k=3)
         elif num == 3:  # Coronal view
             image_2d = np.flipud(np.rot90(self.volume3d[self.X, :, :]))
         else:
@@ -335,6 +338,8 @@ class MainPage(QMainWindow):
         pixmap = QPixmap.fromImage(image)
         panel.scene.clear()
         panel.scene.addPixmap(pixmap)
+        panel.view.setScene(panel.scene)
+        panel.view.setTransform(panel.view.transform().scale(panel.scale_factor, panel.scale_factor))  # Apply scaling
 
     def load_pictures(self):
         # if self.selectedItem is None:
@@ -393,6 +398,28 @@ class MainPage(QMainWindow):
 
         for num, pa in enumerate(self.panels):
             self.load_panel_image(pa, num)
+
+    def zoom_in(self):
+        self.zoom(1.1)
+
+    def zoom_out(self):
+        self.zoom(0.9)
+
+    def zoom(self, factor):
+        for panel in self.panels:
+            panel.scale_factor *= factor
+            panel.view.setTransform(panel.view.transform().scale(factor, factor))
+            self.update_panel_image(panel, self.get_current_image_data(panel))
+
+    def get_current_image_data(self, panel):
+        if panel == self.panels[0]:  # Axial view
+            return self.volume3d[:, :, self.Z]
+        elif panel == self.panels[1]:  # Sagittal view
+            return np.rot90(self.volume3d[:, self.Y, :], k=3)
+        elif panel == self.panels[2]:  # Coronal view
+            return np.flipud(np.rot90(self.volume3d[self.X, :, :]))
+        else:
+            return np.zeros((512, 512), dtype=np.int16)  # Placeholder for the 3D view
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
