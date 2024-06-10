@@ -5,7 +5,8 @@ import pydicom as dicom
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QToolBar, QAction, QWidget, QSlider, QLabel, QSplitter, QGraphicsView, QGraphicsScene, QHBoxLayout, QGridLayout, QSizePolicy, QMenu, QFileDialog, QListWidget, QListWidgetItem
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap, QColor
-from PIL import Image
+import shutil
+
 
 class Vector3D:
     def __init__(self, x, y, z):
@@ -80,8 +81,6 @@ class MainPage(QMainWindow):
 
         self.dataList = []
         self.selectedItem = None
-
-        self.load_dicom_images()  # Load the DICOM images
         
     def init_toolbar(self):
         menu_action = QAction("Menu", self)
@@ -244,85 +243,47 @@ class MainPage(QMainWindow):
     def input_button_click(self):
         options = QFileDialog.Options()
         options |= QFileDialog.ReadOnly
-        file, _ = QFileDialog.getOpenFileName(self, "Select a RAW file", "", "RAW Files (*.raw);;All Files (*)", options=options)
-        if not file:
+        folder = QFileDialog.getExistingDirectory(self, "Select a Folder", options=options)
+        if not folder:
             return
 
-        self.load_raw_file(file)
+        self.load_folder(folder)
 
-    def load_raw_file(self, file):
-        # Open and read the file into a buffer
-        with open(file, 'rb') as f:
-            buffer = f.read()
-
-        # Convert the buffer to a numpy array
-        bytes_array = np.frombuffer(buffer, dtype=np.uint8)
-        z_size = int(len(buffer) / self.ImagePixelSize)
-        image_data = np.zeros((512, 512, z_size), dtype=np.int16)
-
-        gap1, gap2, gap3, gap4, gap5 = 0, 0, 0, 0, 0
-
-        for k in range(z_size):
-            kk = self.ImagePixelSize * k
-            for j in range(512):
-                jj = self.ImageStride * j
-                if j < self.y_end:
-                    for i in range(512):
-                        BytesNum = kk + jj + 2 * i
-                        s = np.int16(bytes_array[BytesNum] * 256 + bytes_array[BytesNum + 1])
-                        if s > -600:
-                            gap1 += 1
-                        if s > self.MaxCTvalue:
-                            self.MaxCTvalue = s
-                        image_data[i, j, k] = s
-                    if k == 0 and gap1 < 100 and gap3 > 300 and gap5 < 200 and j < self.y_end:
-                        self.y_end = j - 5
-                        j = self.y_end
-                    gap5, gap4, gap3, gap2, gap1 = gap4, gap3, gap2, gap1, 0
-                else:
-                    for i in range(512):
-                        image_data[i, j, k] = np.int16(self.CT_Ajust)
-
-        # Create and add picture info to the list
-        picture_info = PictureInfo(file)
-        picture_info.image_data = image_data
-        self.dataList.append(picture_info)
-        self.y_end = 512
+    def load_folder(self, folder):
+        # Get the folder name
+        folder_name = os.path.basename(folder)
         
-        # Update the list view with the file name
-        item = QListWidgetItem(os.path.basename(file))  # Display only the file name
+        # Define the destination path in the current working directory
+        destination = os.path.join(os.getcwd()+"/dicom-folder", folder_name)
+        # Copy the entire folder to the destination
+        if not os.path.exists(destination):
+            shutil.copytree(folder, destination)
+        
+        # Save the folder path in dataList
+        self.dataList.append(destination)
+        
+        # Update the list view with the folder name
+        item = QListWidgetItem(folder_name)  # Display only the folder name
         self.list_view.addItem(item)
 
-        # Print debug information
-        print("File loaded:", os.path.basename(file))
-        print("Image data shape:", image_data.shape)
-        print("Picture Info", picture_info)
-        print(image_data)
-
     def list_view_item_click(self, item):
-        for pic_info in self.dataList:
-            if os.path.basename(pic_info.file_name) == item.text():
-                self.selectedItem = pic_info
-                break
-
+        self.selectedItem = item.text()
+        
         if self.selectedItem:
-            self.x_size, self.y_size, self.z_size = self.selectedItem.image_data.shape
-            self.CenterPoint.x = self.x_size / 2
-            self.CenterPoint.y = self.y_size / 2
-            self.CenterPoint.z = self.z_size / 2 
             self.IsSelectedItem = 1
-            print(f"Selected Item: {os.path.basename(self.selectedItem.file_name)}")
-            self.update_images()
+            print(f"Selected Item: {self.selectedItem}")
+            self.load_dicom_images(self.selectedItem)  # Load the DICOM images
+            # self.update_images()
 
     def btnLoadPictures_Click(self):
-        # if self.IsSelectedItem == 0:
-        #     return
+        if self.IsSelectedItem == 0:
+            return
         for num, pa in enumerate(self.panels):
             self.load_panel_image(pa, num)
 
     def load_panel_image(self, pa, num):
-        # if self.IsSelectedItem == 0:
-        #     return
+        if self.IsSelectedItem == 0:
+            return
         
         if num == 1:  # Axial view XY
             image_2d = self.volume3d[:, :, self.Z]
@@ -347,31 +308,26 @@ class MainPage(QMainWindow):
         #     return
         self.display_images(self.selectedItem.image_data)
 
-    def make_2d_image(self, image_2d, contrast_factor=1):
+    def make_2d_image(self, image_2d):
         # Normalize the image data
         normalized_image = ((image_2d - image_2d.min()) / (image_2d.max() - image_2d.min()) * 255).astype(np.uint8)
-
-        # Adjust contrast
-        factor = (259 * (contrast_factor + 255)) / (255 * (259 - contrast_factor))
-        adjusted_image = np.clip(128 + factor * (normalized_image - 128), 0, 255).astype(np.uint8)
-
+        
         # Set the background to black where pixel values are above a certain threshold (e.g., 250)
         threshold = 250
-        background_mask = adjusted_image > threshold
-        adjusted_image[background_mask] = 0
-
+        background_mask = normalized_image > threshold
+        normalized_image[background_mask] = 0
+        
         # Create QImage
-        height, width = adjusted_image.shape
-        image_2d_bytes = adjusted_image.tobytes()
+        height, width = normalized_image.shape
+        image_2d_bytes = normalized_image.tobytes()
         image = QImage(image_2d_bytes, width, height, QImage.Format_Grayscale8)
         return image
-
 
     def get_image_position(slice):
         return slice.ImagePositionPatient[2]
 
-    def load_dicom_images(self):
-        path = "./pB"
+    def load_dicom_images(self, folder_name):
+        path = "./dicom-folder/" + folder_name
         ct_images = os.listdir(path)
         slices = [dicom.read_file(path + '/' + s, force=True) for s in ct_images]
         slices = sorted(slices, key=lambda x: x.ImagePositionPatient[2], reverse=True)
