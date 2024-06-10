@@ -5,6 +5,7 @@ import pydicom as dicom
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QToolBar, QAction, QWidget, QSlider, QLabel, QSplitter, QGraphicsView, QGraphicsScene, QHBoxLayout, QGridLayout, QSizePolicy, QMenu, QFileDialog, QListWidget, QListWidgetItem
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap, QColor
+from PIL import Image
 
 class Vector3D:
     def __init__(self, x, y, z):
@@ -178,10 +179,10 @@ class MainPage(QMainWindow):
 
     def init_panels(self):
         # Add panels to the grid layout
-        panel1 = self.create_panel("Axial")
-        panel2 = self.create_panel("Sagittal")
-        panel3 = self.create_panel("Coronal")
-        panel4 = self.create_panel("3D")  # Placeholder for 3D view if needed
+        panel1 = self.create_panel("3D")
+        panel2 = self.create_panel("XY")
+        panel3 = self.create_panel("YZ")
+        panel4 = self.create_panel("XZ")  # Placeholder for 3D view if needed
 
         self.main_view_layout.addWidget(panel1, 0, 0)
         self.main_view_layout.addWidget(panel2, 0, 1)
@@ -323,11 +324,11 @@ class MainPage(QMainWindow):
         # if self.IsSelectedItem == 0:
         #     return
         
-        if num == 1:  # Axial view
+        if num == 1:  # Axial view XY
             image_2d = self.volume3d[:, :, self.Z]
-        elif num == 2:  # Sagittal view
-            image_2d = np.rot90(self.volume3d[:, self.Y, :], k=3)
-        elif num == 3:  # Coronal view
+        elif num == 2:  # Sagittal view YZ 
+            image_2d = np.flipud(np.rot90(self.volume3d[:, self.Y, :]))
+        elif num == 3:  # Coronal view XZ
             image_2d = np.flipud(np.rot90(self.volume3d[self.X, :, :]))
         else:
             image_2d = np.zeros((512, 512), dtype=np.int16)  # Placeholder for the 3D view
@@ -346,20 +347,25 @@ class MainPage(QMainWindow):
         #     return
         self.display_images(self.selectedItem.image_data)
 
-    def make_2d_image(self, image_2d):
+    def make_2d_image(self, image_2d, contrast_factor=3.0):
         # Normalize the image data
         normalized_image = ((image_2d - image_2d.min()) / (image_2d.max() - image_2d.min()) * 255).astype(np.uint8)
-        
+
+        # Adjust contrast
+        factor = (259 * (contrast_factor + 255)) / (255 * (259 - contrast_factor))
+        adjusted_image = np.clip(128 + factor * (normalized_image - 128), 0, 255).astype(np.uint8)
+
         # Set the background to black where pixel values are above a certain threshold (e.g., 250)
         threshold = 250
-        background_mask = normalized_image > threshold
-        normalized_image[background_mask] = 0
-        
+        background_mask = adjusted_image > threshold
+        adjusted_image[background_mask] = 0
+
         # Create QImage
-        height, width = normalized_image.shape
-        image_2d_bytes = normalized_image.tobytes()
+        height, width = adjusted_image.shape
+        image_2d_bytes = adjusted_image.tobytes()
         image = QImage(image_2d_bytes, width, height, QImage.Format_Grayscale8)
         return image
+
 
     def get_image_position(slice):
         return slice.ImagePositionPatient[2]
@@ -412,11 +418,11 @@ class MainPage(QMainWindow):
             self.update_panel_image(panel, self.get_current_image_data(panel))
 
     def get_current_image_data(self, panel):
-        if panel == self.panels[0]:  # Axial view
+        if panel == self.panels[0]:  # Axial view XY
             return self.volume3d[:, :, self.Z]
-        elif panel == self.panels[1]:  # Sagittal view
-            return np.rot90(self.volume3d[:, self.Y, :], k=3)
-        elif panel == self.panels[2]:  # Coronal view
+        elif panel == self.panels[1]:  # Sagittal view YZ
+            return np.flipud(np.rot90(self.volume3d[:, self.Y, :]))
+        elif panel == self.panels[2]:  # Coronal view XZ
             return np.flipud(np.rot90(self.volume3d[self.X, :, :]))
         else:
             return np.zeros((512, 512), dtype=np.int16)  # Placeholder for the 3D view
