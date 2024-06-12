@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pydicom as dicom
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QToolBar, QAction, QWidget, QSlider, QLabel, QSplitter, QGraphicsView, QGraphicsScene, QHBoxLayout, QGridLayout, QSizePolicy, QMenu, QFileDialog, QListWidget, QListWidgetItem
-from PyQt5.QtCore import Qt, QLineF, QEvent
+from PyQt5.QtCore import Qt, QLineF
 from PyQt5.QtGui import QImage, QPixmap, QColor, QPen
 import shutil
 
@@ -207,13 +207,17 @@ class MainPage(QMainWindow):
         
         label = QLabel(label_text)
         label.setAlignment(Qt.AlignCenter)
-        label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        label.setFixedSize(100, 40)  # Adjust the size as needed
         scene.addWidget(label)
-
+        
         # Add x-axis and y-axis lines
-        pen = QPen(QColor(Qt.red))
-        panel.x_axis = scene.addLine(QLineF(0, 0, 0, 0), pen)  # Placeholder line
-        panel.y_axis = scene.addLine(QLineF(0, 0, 0, 0), pen)  # Placeholder line
+        pen_x = QPen(QColor(Qt.magenta))
+        pen_y = QPen(QColor(Qt.yellow))
+        pen_z = QPen(QColor(Qt.cyan))
+        panel.x_axis = scene.addLine(QLineF(0, 0, 0, 0), pen_x)  # Placeholder line
+        panel.y_axis = scene.addLine(QLineF(0, 0, 0, 0), pen_y)  # Placeholder line
+        panel.z_axis = scene.addLine(QLineF(0, 0, 0, 0), pen_z)  # Placeholder line
 
         panel.scene = scene
         panel.view = view
@@ -221,7 +225,6 @@ class MainPage(QMainWindow):
         
         view.resizeEvent = lambda event: self.update_axis_lines()  # Update lines when the view is resized
         return panel
-
 
     def toggle_sidebar(self):
         if self.sidebar.isVisible():
@@ -400,11 +403,13 @@ class MainPage(QMainWindow):
                 panel.x_axis.setLine(QLineF(0, self.X, width, self.X))
                 panel.y_axis.setLine(QLineF(self.Z, 0, self.Z, height))
             elif panel == self.panels[2]:  # YZ panel
-                panel.x_axis.setLine(QLineF(0, self.Y, width, self.Y))
-                panel.y_axis.setLine(QLineF(self.X, 0, self.X, height))
+                panel.z_axis.setLine(QLineF(0, self.Y, width, self.Y))
+                panel.x_axis.setLine(QLineF(self.X, 0, self.X, height))
             elif panel == self.panels[3]:  # XZ panel
-                panel.x_axis.setLine(QLineF(0, self.Y, width, self.Y))
+                panel.z_axis.setLine(QLineF(0, self.Y, width, self.Y))
                 panel.y_axis.setLine(QLineF(self.Z, 0, self.Z, height))
+
+
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
