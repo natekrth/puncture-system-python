@@ -70,7 +70,7 @@ class MainPage(QMainWindow):
         self.panels = []
         self.X = 256
         self.Y = 256
-        self.Z = 120
+        self.Z = 256
 
         self.x_size = 512
         self.y_size = 512
@@ -165,7 +165,7 @@ class MainPage(QMainWindow):
 
         self.add_slider(sliders_layout, "X Value", 512, 256, self.slider_changed, "X Value")
         self.add_slider(sliders_layout, "Y Value", 512, 256, self.slider_changed, "Y Value")
-        self.add_slider(sliders_layout, "Z Value", 165, 0, self.slider_changed, "Z Value")
+        self.add_slider(sliders_layout, "Z Value", 165, 83, self.slider_changed, "Z Value")
         self.add_slider(sliders_layout, "X Rotation", 180, 90, self.slider_changed, "X Rotation")
         self.add_slider(sliders_layout, "Y Rotation", 180, 90, self.slider_changed, "Y Rotation")
         self.add_slider(sliders_layout, "Z Rotation", 180, 90, self.slider_changed, "Z Rotation")
@@ -395,6 +395,9 @@ class MainPage(QMainWindow):
         self.X = img_shape[0] // 2
         self.Y = img_shape[1] // 2
         self.Z = img_shape[2] // 2
+        print(self.X)
+        print("Y", self.Y)
+        print(self.Z)
 
     def show_add_menu(self):
         print("Show add menu")
