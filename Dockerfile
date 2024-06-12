@@ -7,7 +7,12 @@ WORKDIR /app
 # Copy the current directory contents into the container at /app
 COPY . /app
 
+# Install system dependencies for PyQt5
+RUN apt-get update && apt-get install -y qtbase5-dev
+
+# Upgrade pip
 RUN pip install --upgrade pip
+
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
