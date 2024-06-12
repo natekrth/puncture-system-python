@@ -3,8 +3,8 @@ import os
 import numpy as np
 import pydicom as dicom
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QToolBar, QAction, QWidget, QSlider, QLabel, QSplitter, QGraphicsView, QGraphicsScene, QHBoxLayout, QGridLayout, QSizePolicy, QMenu, QFileDialog, QListWidget, QListWidgetItem
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QImage, QPixmap, QColor
+from PyQt5.QtCore import Qt, QLineF, QEvent
+from PyQt5.QtGui import QImage, QPixmap, QColor, QPen
 import shutil
 
 
@@ -40,13 +40,13 @@ class MainPage(QMainWindow):
 
         # Placeholder for panel number and current slice indexes
         self.panels = []
-        self.X = 0
-        self.Y = 0
-        self.Z = 0
+        self.X = 256
+        self.Y = 256
+        self.Z = 256
 
-        self.x_size = 0
-        self.y_size = 0
-        self.z_size = 0
+        self.x_size = 512
+        self.y_size = 512
+        self.z_size = 512
         
         self.thetaX = 0
         self.thetaY = 0
@@ -165,6 +165,7 @@ class MainPage(QMainWindow):
         elif sender.objectName() == "Z Value":
             self.Y = value
         self.update_images()
+        self.update_axis_lines()
         print(f"Slider changed: {sender.objectName()} to {value}")
 
     def init_main_view(self):
@@ -203,16 +204,24 @@ class MainPage(QMainWindow):
         view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         layout.addWidget(view)
-
+        
         label = QLabel(label_text)
         label.setAlignment(Qt.AlignCenter)
         label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         scene.addWidget(label)
 
+        # Add x-axis and y-axis lines
+        pen = QPen(QColor(Qt.red))
+        panel.x_axis = scene.addLine(QLineF(0, 0, 0, 0), pen)  # Placeholder line
+        panel.y_axis = scene.addLine(QLineF(0, 0, 0, 0), pen)  # Placeholder line
+
         panel.scene = scene
         panel.view = view
         panel.scale_factor = 1.0  # Add a scale factor attribute to the panel
+        
+        view.resizeEvent = lambda event: self.update_axis_lines()  # Update lines when the view is resized
         return panel
+
 
     def toggle_sidebar(self):
         if self.sidebar.isVisible():
@@ -382,6 +391,24 @@ class MainPage(QMainWindow):
             return np.flipud(np.rot90(self.volume3d[self.X, :, :]))
         else:
             return np.zeros((512, 512), dtype=np.int16)  # Placeholder for the 3D view
+
+    def update_axis_lines(self):
+        for panel in self.panels:
+            width = panel.view.viewport().width()
+            height = panel.view.viewport().height()
+            if panel == self.panels[1]:  # XY panel
+                panel.x_axis.setLine(QLineF(0, self.X, width, self.X))
+                panel.y_axis.setLine(QLineF(self.Z, 0, self.Z, height))
+            elif panel == self.panels[2]:  # YZ panel
+                panel.x_axis.setLine(QLineF(0, self.Y, width, self.Y))
+                panel.y_axis.setLine(QLineF(self.X, 0, self.X, height))
+            elif panel == self.panels[3]:  # XZ panel
+                panel.x_axis.setLine(QLineF(0, self.Y, width, self.Y))
+                panel.y_axis.setLine(QLineF(self.Z, 0, self.Z, height))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.update_axis_lines()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
