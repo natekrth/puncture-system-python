@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pydicom as dicom
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QToolBar, QAction, QWidget, QSlider, QLabel, QSplitter, QGraphicsView, QGraphicsScene, QHBoxLayout, QGridLayout, QSizePolicy, QMenu, QFileDialog, QListWidget, QListWidgetItem
-from PyQt5.QtCore import Qt, QLineF
+from PyQt5.QtCore import Qt, QLineF, QRectF
 from PyQt5.QtGui import QImage, QPixmap, QColor, QPen
 import shutil
 
@@ -13,6 +13,7 @@ class Vector3D:
         self.x = x
         self.y = y
         self.z = z
+
 
 class Matrix3D:
     def __init__(self, x1=0, x2=0, x3=0, y1=0, y2=0, y3=0, z1=0, z2=0, z3=0):
@@ -25,11 +26,41 @@ class Matrix3D:
         self.z1 = z1
         self.z2 = z2
         self.z3 = z3
-        
+
+
 class PictureInfo:
     def __init__(self, file_name):
         self.file_name = file_name
         self.image_data = None
+
+
+class AxisWidget(QGraphicsView):
+    def __init__(self, parent=None, plane='XY'):
+        super().__init__(parent)
+        self.setScene(QGraphicsScene(self))
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setBackgroundBrush(QColor(Qt.transparent))
+        self.setStyleSheet("background: transparent")
+
+        if plane == 'XY':
+            self.pen_x = QPen(QColor(Qt.magenta), 2)
+            self.pen_y = QPen(QColor(Qt.yellow), 2)
+        elif plane == 'YZ':
+            self.pen_x = QPen(QColor(Qt.cyan), 2)
+            self.pen_y = QPen(QColor(Qt.magenta), 2)
+        elif plane == 'XZ':
+            self.pen_x = QPen(QColor(Qt.cyan), 2)
+            self.pen_y = QPen(QColor(Qt.yellow), 2)
+
+        self.x_axis = None
+        self.y_axis = None
+
+    def update_axes(self, x, y, width, height):
+        self.scene().clear()  # Clear the scene before drawing the new axes
+        self.x_axis = self.scene().addLine(QLineF(0, y, width, y), self.pen_x)
+        self.y_axis = self.scene().addLine(QLineF(x, 0, x, height), self.pen_y)
+
 
 class MainPage(QMainWindow):
     def __init__(self):
@@ -47,17 +78,17 @@ class MainPage(QMainWindow):
         self.x_size = 512
         self.y_size = 512
         self.z_size = 512
-        
+
         self.thetaX = 0
         self.thetaY = 0
         self.thetaZ = 0
-        
+
         self.CenterPoint = Vector3D(0, 0, 0)
-        
+
         self.NeedleMatrix3D = np.zeros((512, 512, 512), dtype=np.int16)
         self.NowMatrix3D = np.zeros((512, 512, 512), dtype=np.int16)
-        
-        self.IsSelectedItem = 0   
+
+        self.IsSelectedItem = 0
         self.y_end = 512
         self.ImageStride = 512 * 2
         self.ImagePixelSize = 512 * 512 * 2
@@ -81,7 +112,7 @@ class MainPage(QMainWindow):
 
         self.dataList = []
         self.selectedItem = None
-        
+
     def init_toolbar(self):
         menu_action = QAction("Menu", self)
         menu_action.triggered.connect(self.toggle_sidebar)
@@ -135,9 +166,9 @@ class MainPage(QMainWindow):
         sliders_layout.setSpacing(10)  # Optional: adjust spacing between sliders
         sliders_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.add_slider(sliders_layout, "X Value", 170, 0, self.slider_changed, "X Value")
-        self.add_slider(sliders_layout, "Y Value", 512, 256, self.slider_changed, "Y Value")
-        self.add_slider(sliders_layout, "Z Value", 512, 256, self.slider_changed, "Z Value")
+        self.add_slider(sliders_layout, "X Value", 165, 0, self.slider_changed, "X Value")
+        self.add_slider(sliders_layout, "Y Value", 511, 256, self.slider_changed, "Y Value")
+        self.add_slider(sliders_layout, "Z Value", 511, 256, self.slider_changed, "Z Value")
         self.add_slider(sliders_layout, "X Rotation", 180, 90, self.slider_changed, "X Rotation")
         self.add_slider(sliders_layout, "Y Rotation", 180, 90, self.slider_changed, "Y Rotation")
         self.add_slider(sliders_layout, "Z Rotation", 180, 90, self.slider_changed, "Z Rotation")
@@ -159,13 +190,13 @@ class MainPage(QMainWindow):
     def slider_changed(self, value):
         sender = self.sender()
         if sender.objectName() == "X Value":
-            self.Z = value
-        elif sender.objectName() == "Y Value":
             self.X = value
-        elif sender.objectName() == "Z Value":
+        elif sender.objectName() == "Y Value":
             self.Y = value
+        elif sender.objectName() == "Z Value":
+            self.Z = value
         self.update_images()
-        self.update_axis_lines()
+        # self.update_axes()
         print(f"Slider changed: {sender.objectName()} to {value}")
 
     def init_main_view(self):
@@ -191,6 +222,15 @@ class MainPage(QMainWindow):
 
         self.panels.extend([panel1, panel2, panel3, panel4])
 
+        # Add AxisWidget on top of panels
+        self.axis_widgets = []
+        planes = ['3D', 'XY', 'YZ', 'XZ']
+        for i, (panel, plane) in enumerate(zip(self.panels, planes)):
+            if plane != '3D':
+                axis_widget = AxisWidget(plane=plane)
+                self.axis_widgets.append(axis_widget)
+                self.main_view_layout.addWidget(axis_widget, i // 2, i % 2)
+
     def create_panel(self, label_text):
         panel = QWidget()
         layout = QVBoxLayout(panel)
@@ -204,26 +244,17 @@ class MainPage(QMainWindow):
         view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         layout.addWidget(view)
-        
+
         label = QLabel(label_text)
         label.setAlignment(Qt.AlignCenter)
-        # label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         label.setFixedSize(100, 40)  # Adjust the size as needed
         scene.addWidget(label)
-        
-        # Add x-axis and y-axis lines
-        pen_x = QPen(QColor(Qt.magenta))
-        pen_y = QPen(QColor(Qt.yellow))
-        pen_z = QPen(QColor(Qt.cyan))
-        panel.x_axis = scene.addLine(QLineF(0, 0, 0, 0), pen_x)  # Placeholder line
-        panel.y_axis = scene.addLine(QLineF(0, 0, 0, 0), pen_y)  # Placeholder line
-        panel.z_axis = scene.addLine(QLineF(0, 0, 0, 0), pen_z)  # Placeholder line
 
         panel.scene = scene
         panel.view = view
         panel.scale_factor = 1.0  # Add a scale factor attribute to the panel
-        
-        view.resizeEvent = lambda event: self.update_axis_lines()  # Update lines when the view is resized
+
+        view.resizeEvent = lambda event: self.update_axes()  # Update lines when the view is resized
         return panel
 
     def toggle_sidebar(self):
@@ -264,23 +295,23 @@ class MainPage(QMainWindow):
     def load_folder(self, folder):
         # Get the folder name
         folder_name = os.path.basename(folder)
-        
+
         # Define the destination path in the current working directory
-        destination = os.path.join(os.getcwd()+"/dicom-folder", folder_name)
+        destination = os.path.join(os.getcwd() + "/dicom-folder", folder_name)
         # Copy the entire folder to the destination
         if not os.path.exists(destination):
             shutil.copytree(folder, destination)
-        
+
         # Save the folder path in dataList
         self.dataList.append(destination)
-        
+
         # Update the list view with the folder name
         item = QListWidgetItem(folder_name)  # Display only the folder name
         self.list_view.addItem(item)
 
     def list_view_item_click(self, item):
         self.selectedItem = item.text()
-        
+
         if self.selectedItem:
             self.IsSelectedItem = 1
             print(f"Selected Item: {self.selectedItem}")
@@ -296,10 +327,10 @@ class MainPage(QMainWindow):
     def load_panel_image(self, pa, num):
         if self.IsSelectedItem == 0:
             return
-        
+
         if num == 1:  # Axial view XY
             image_2d = self.volume3d[:, :, self.Z]
-        elif num == 2:  # Sagittal view YZ 
+        elif num == 2:  # Sagittal view YZ
             image_2d = np.flipud(np.rot90(self.volume3d[:, self.Y, :]))
         elif num == 3:  # Coronal view XZ
             image_2d = np.flipud(np.rot90(self.volume3d[self.X, :, :]))
@@ -316,19 +347,17 @@ class MainPage(QMainWindow):
         panel.view.setTransform(panel.view.transform().scale(panel.scale_factor, panel.scale_factor))  # Apply scaling
 
     def load_pictures(self):
-        # if self.selectedItem is None:
-        #     return
         self.display_images(self.selectedItem.image_data)
 
     def make_2d_image(self, image_2d):
         # Normalize the image data
         normalized_image = ((image_2d - image_2d.min()) / (image_2d.max() - image_2d.min()) * 255).astype(np.uint8)
-        
+
         # Set the background to black where pixel values are above a certain threshold (e.g., 250)
         threshold = 250
         background_mask = normalized_image > threshold
         normalized_image[background_mask] = 0
-        
+
         # Create QImage
         height, width = normalized_image.shape
         image_2d_bytes = normalized_image.tobytes()
@@ -367,9 +396,6 @@ class MainPage(QMainWindow):
         print("Show add menu")
 
     def update_images(self):
-        # if not self.selectedItem:
-        #     return
-
         for num, pa in enumerate(self.panels):
             self.load_panel_image(pa, num)
 
@@ -386,34 +412,33 @@ class MainPage(QMainWindow):
             self.update_panel_image(panel, self.get_current_image_data(panel))
 
     def get_current_image_data(self, panel):
-        if panel == self.panels[0]:  # Axial view XY
+        if panel == self.panels[1]:  # Axial view XY
             return self.volume3d[:, :, self.Z]
-        elif panel == self.panels[1]:  # Sagittal view YZ
+        elif panel == self.panels[2]:  # Sagittal view YZ
             return np.flipud(np.rot90(self.volume3d[:, self.Y, :]))
-        elif panel == self.panels[2]:  # Coronal view XZ
+        elif panel == self.panels[3]:  # Coronal view XZ
             return np.flipud(np.rot90(self.volume3d[self.X, :, :]))
         else:
             return np.zeros((512, 512), dtype=np.int16)  # Placeholder for the 3D view
 
-    def update_axis_lines(self):
-        for panel in self.panels:
+    def update_axes(self):
+        for panel, axis_widget in zip(self.panels, self.axis_widgets):
             width = panel.view.viewport().width()
             height = panel.view.viewport().height()
             if panel == self.panels[1]:  # XY panel
-                panel.x_axis.setLine(QLineF(0, self.X, width, self.X))
-                panel.y_axis.setLine(QLineF(self.Z, 0, self.Z, height))
+                x, y = self.Z, self.X
+                axis_widget.update_axes(x, y, width, height)
             elif panel == self.panels[2]:  # YZ panel
-                panel.z_axis.setLine(QLineF(0, self.Y, width, self.Y))
-                panel.x_axis.setLine(QLineF(self.X, 0, self.X, height))
+                x, y = self.X, height - self.Y
+                axis_widget.update_axes(x, y, width, height)
             elif panel == self.panels[3]:  # XZ panel
-                panel.z_axis.setLine(QLineF(0, self.Y, width, self.Y))
-                panel.y_axis.setLine(QLineF(self.Z, 0, self.Z, height))
-
-
+                x, y = self.Z, height - self.Y
+                axis_widget.update_axes(x, y, width, height)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self.update_axis_lines()
+        self.update_axes()
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
