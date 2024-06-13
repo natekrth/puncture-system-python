@@ -234,6 +234,10 @@ class MainPage(QMainWindow):
 
     def create_panel(self, label_text):
         panel = QWidget()
+        panel.setMinimumSize(512, 512)
+        panel.setMaximumSize(512, 512)  # This line ensures the initial size is 512x512
+        panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)  # Allow expanding
+
         layout = QVBoxLayout(panel)
         layout.setSpacing(0)  # Remove spacing within the panel
         layout.setContentsMargins(0, 0, 0, 0)  # Remove margins within the panel
@@ -249,15 +253,27 @@ class MainPage(QMainWindow):
         label = QLabel(label_text)
         label.setAlignment(Qt.AlignCenter)
         label.setFixedSize(100, 40)  # Adjust the size as needed
-        # label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         scene.addWidget(label)
 
         panel.scene = scene
         panel.view = view
         panel.scale_factor = 1.0  # Add a scale factor attribute to the panel
-        
-        view.resizeEvent = lambda event: self.update_axes()  # Update lines when the view is resized
+
+        def resizeEvent(event):
+            size = panel.size()
+            aspect_ratio = 1  # Aspect ratio of 1:1
+            if size.width() / size.height() > aspect_ratio:
+                new_width = int(size.height() * aspect_ratio)
+                panel.setFixedSize(new_width, size.height())
+            else:
+                new_height = int(size.width() / aspect_ratio)
+                panel.setFixedSize(size.width(), new_height)
+            self.update_axes()
+
+        panel.resizeEvent = resizeEvent
+
         return panel
+
 
     def toggle_sidebar(self):
         if self.sidebar.isVisible():
