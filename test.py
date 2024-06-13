@@ -165,7 +165,7 @@ class MainPage(QMainWindow):
 
         self.add_slider(sliders_layout, "X Value", 512, 256, self.slider_changed, "X Value")
         self.add_slider(sliders_layout, "Y Value", 512, 256, self.slider_changed, "Y Value")
-        self.add_slider(sliders_layout, "Z Value", 165, 83, self.slider_changed, "Z Value")
+        self.add_slider(sliders_layout, "Z Value", 512, 256, self.slider_changed, "Z Value")
         self.add_slider(sliders_layout, "X Rotation", 180, 90, self.slider_changed, "X Rotation")
         self.add_slider(sliders_layout, "Y Rotation", 180, 90, self.slider_changed, "Y Rotation")
         self.add_slider(sliders_layout, "Z Rotation", 180, 90, self.slider_changed, "Z Rotation")
@@ -191,7 +191,7 @@ class MainPage(QMainWindow):
         elif sender.objectName() == "Y Value":
             self.X = value
         elif sender.objectName() == "Z Value":
-            self.Z = value
+            self.Z = 400 - value
         self.update_images()
         self.update_axes()
         print(f"Slider changed: {sender.objectName()} to {value}")
@@ -329,15 +329,18 @@ class MainPage(QMainWindow):
     def load_panel_image(self, pa, num):
         if self.IsSelectedItem == 0:
             return
-        
-        if num == 1:  # Axial view XY
-            image_2d = self.volume3d[:, :, self.Z]
-        elif num == 2:  # Sagittal view YZ 
-            image_2d = np.flipud(np.rot90(self.volume3d[:, self.Y, :]))
-        elif num == 3:  # Coronal view XZ
-            image_2d = np.flipud(np.rot90(self.volume3d[self.X, :, :]))
-        else:
-            image_2d = np.zeros((512, 512), dtype=np.int16)  # Placeholder for the 3D view
+        try:
+            if num == 1:  # Axial view XY
+                image_2d = self.volume3d[:, :, self.Z]
+            elif num == 2:  # Sagittal view YZ 
+                image_2d = np.flipud(np.rot90(self.volume3d[:, self.Y, :]))
+            elif num == 3:  # Coronal view XZ
+                image_2d = np.flipud(np.rot90(self.volume3d[self.X, :, :]))
+            else:
+                image_2d = np.zeros((512, 512), dtype=np.int16)  # Placeholder for the 3D view
+        except IndexError:
+            image_2d = np.zeros((512, 512), dtype=np.int16)  # Set the panel to black screen in case of error
+            
         self.update_panel_image(pa, image_2d)
 
     def update_panel_image(self, panel, image_data):
@@ -439,10 +442,10 @@ class MainPage(QMainWindow):
                 x, y = self.Y, self.X
                 axis_widget.update_axes(x, y, width, height)
             elif panel == self.panels[2]:  # YZ panel
-                x, y = self.X, height - self.Z
+                x, y = self.X, self.Z
                 axis_widget.update_axes(x, y, width, height)
             elif panel == self.panels[3]:  # XZ panel
-                x, y = self.Y, height - self.Z
+                x, y = self.Y, self.Z
                 axis_widget.update_axes(x, y, width, height)
 
     def resizeEvent(self, event):
