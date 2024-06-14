@@ -178,11 +178,19 @@ class MainPage:
                 self.draw_axes(pa, "blue", "yellow")
 
     def draw_axes(self, panel, x_color, y_color):
+        panel.canvas.delete("axes")  # Clear previous axes
         width = panel.canvas.winfo_width()
         height = panel.canvas.winfo_height()
-        panel.canvas.create_line(0, height // 2, width, height // 2, fill=x_color)  # x-axis
-        panel.canvas.create_line(width // 2, 0, width // 2, height, fill=y_color)  # y-axis
+        panel.canvas.create_line(0, height // 2, width, height // 2, fill=x_color, tags="axes")  # x-axis
+        panel.canvas.create_line(width // 2, 0, width // 2, height, fill=y_color, tags="axes")  # y-axis
 
+    def draw_axes_value_change(self, panel, x_color, y_color, x_axis, y_axis):
+        panel.canvas.delete("axes")  # Clear previous axes
+        width = panel.canvas.winfo_width()
+        height = panel.canvas.winfo_height()
+        panel.canvas.create_line(0, y_axis, width, y_axis, fill=x_color, tags="axes")  # x-axis
+        panel.canvas.create_line(x_axis, 0, x_axis, height, fill=y_color, tags="axes")  # y-axis
+        
     def toggle_sidebar(self):
         if self.sidebar.winfo_viewable():
             self.sidebar.pack_forget()
@@ -258,14 +266,14 @@ class MainPage:
             panel.canvas.image = photo
 
         # Redraw axes with the correct colors
-        if panel == self.panel1:
-            self.draw_axes(panel, "white", "white")
-        elif panel == self.panel2:
-            self.draw_axes(panel, "magenta", "yellow")
-        elif panel == self.panel3:
-            self.draw_axes(panel, "blue", "magenta")
-        elif panel == self.panel4:
-            self.draw_axes(panel, "blue", "yellow")
+        if panel == self.panel2:
+            self.draw_axes_value_change(panel, "white", "white", self.X, self.Y)
+        # elif panel == self.panel2:
+        #     self.draw_axes_value_change(panel, "magenta", "yellow")
+        # elif panel == self.panel3:
+        #     self.draw_axes_value_change(panel, "blue", "magenta")
+        # elif panel == self.panel4:
+        #     self.draw_axes_value_change(panel, "blue", "yellow")
 
     def load_dicom_images(self, folder_name):
         path = "./dicom-folder/" + folder_name
