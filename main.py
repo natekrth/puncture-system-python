@@ -119,7 +119,7 @@ class MainPage:
             self.X = int(value)
         elif name == "Z Value":
             self.Z = -int(int(value)/z_ratio)
-            if self.Z == 0: # prevent img from being loop when self.Z == 0 because it the same number with -166
+            if self.Z == 0: # prevent img from being loop when self.Z == 0 because it the same number with
                 self.Z = -1
         self.update_images()
         print(f"Slider changed: {name} to {int(self.Z)}")
@@ -136,10 +136,10 @@ class MainPage:
         self.panel3 = self.create_panel("YZ")
         self.panel4 = self.create_panel("XZ")
 
-        self.panel1.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
-        self.panel2.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
-        self.panel3.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
-        self.panel4.grid(row=1, column=1, sticky="nsew", padx=10, pady=10)
+        self.panel1.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.panel2.grid(row=0, column=1, sticky="nsew", padx=1, pady=1)
+        self.panel3.grid(row=1, column=0, sticky="nsew", padx=1, pady=1)
+        self.panel4.grid(row=1, column=1, sticky="nsew", padx=1, pady=1)
 
         self.main_view_frame.grid_columnconfigure(0, weight=1)
         self.main_view_frame.grid_columnconfigure(1, weight=1)
