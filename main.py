@@ -2,7 +2,7 @@ import sys
 import os
 import numpy as np
 import pydicom as dicom
-from tkinter import Tk, Frame, Label, Button, Menu, Listbox, filedialog, Scale, HORIZONTAL, END
+from tkinter import Tk, Frame, Label, Button, Menu, Listbox, filedialog, Scale, HORIZONTAL, END, Canvas
 from tkinter.ttk import Notebook
 from PIL import Image, ImageTk
 import shutil
@@ -151,16 +151,30 @@ class MainPage:
     def create_panel(self, label_text):
         panel = Frame(self.main_view_frame, bg="black", width=512, height=512)
         panel.pack_propagate(False)  # Prevent the panel from resizing to fit its contents
-        panel.canvas = Label(panel, bg="black")
-        panel.canvas.pack(fill="both", expand=True)
+        panel.canvas = Canvas(panel, bg="black")
+        panel.canvas.pack(fill="both", expand=True, anchor="center")
         panel.bind("<Configure>", self.on_panel_resize)
+
+        # Draw initial axes
+        self.draw_axes(panel.canvas)
+
         return panel
 
     def on_panel_resize(self, event):
-        panel = event.widget
-        size = min(panel.winfo_width(), panel.winfo_height())
-        panel.config(width=size, height=size)
-
+        # panel = event.widget
+        # size = min(panel.winfo_width(), panel.winfo_height())
+        # panel.config(width=size, height=size)
+        for num, pa in enumerate(self.panels):
+            size = min(pa.winfo_width(), pa.winfo_height())
+            pa.config(width=size, height=size)
+            self.load_panel_image(pa, num)
+            
+    def draw_axes(self, canvas):
+        width = canvas.winfo_width()
+        height = canvas.winfo_height()
+        canvas.create_line(0, height // 2, width, height // 2, fill="white")  # x-axis
+        canvas.create_line(width // 2, 0, width // 2, height, fill="white")  # y-axis
+        
     def toggle_sidebar(self):
         if self.sidebar.winfo_viewable():
             self.sidebar.pack_forget()
@@ -222,8 +236,22 @@ class MainPage:
     def update_panel_image(self, panel, image_data):
         image = self.make_2d_image(image_data)
         photo = ImageTk.PhotoImage(image=image)
-        panel.canvas.config(image=photo)
+        panel.canvas.delete("all")  # Clear previous images and axes
+
+        # Center the image
+        canvas_width = panel.canvas.winfo_width()
+        canvas_height = panel.canvas.winfo_height()
+        image_width = photo.width()
+        image_height = photo.height()
+        x = (canvas_width - image_width) // 2
+        y = (canvas_height - image_height) // 2
+
+        panel.canvas.create_image(x, y, image=photo, anchor='nw')
         panel.canvas.image = photo
+
+        # Redraw axes
+        panel.canvas.create_line(0, canvas_height // 2, canvas_width, canvas_height // 2, fill="white")  # x-axis
+        panel.canvas.create_line(canvas_width // 2, 0, canvas_width // 2, canvas_height, fill="white")  # y-axis
 
     def load_dicom_images(self, folder_name):
         path = "./dicom-folder/" + folder_name
