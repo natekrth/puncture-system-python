@@ -7,13 +7,11 @@ from tkinter.ttk import Notebook
 from PIL import Image, ImageTk
 import shutil
 
-
 class Vector3D:
     def __init__(self, x, y, z):
         self.x = x
         self.y = y
         self.z = z
-
 
 class MainPage:
     def __init__(self, root):
@@ -112,14 +110,14 @@ class MainPage:
         slider.pack()
 
     def slider_changed(self, name, value):
-        z_ratio = 512/(self.Z_init)
+        z_ratio = 512 / (self.Z_init)
         if name == "X Value":
             self.Y = int(value)
         elif name == "Y Value":
             self.X = int(value)
         elif name == "Z Value":
-            self.Z = -int(int(value)/z_ratio)
-            if self.Z == 0: # prevent img from being loop when self.Z == 0 because it the same number with
+            self.Z = -int(int(value) / z_ratio)
+            if self.Z == 0:  # prevent img from being loop when self.Z == 0 because it the same number with
                 self.Z = -1
         self.update_images()
         print(f"Slider changed: {name} to {int(self.Z)}")
@@ -131,10 +129,10 @@ class MainPage:
         self.init_panels()
 
     def init_panels(self):
-        self.panel1 = self.create_panel("3D")
-        self.panel2 = self.create_panel("XY")
-        self.panel3 = self.create_panel("YZ")
-        self.panel4 = self.create_panel("XZ")
+        self.panel1 = self.create_panel("3D", "white", "white")
+        self.panel2 = self.create_panel("XY", "magenta", "yellow")
+        self.panel3 = self.create_panel("YZ", "blue", "magenta")
+        self.panel4 = self.create_panel("XZ", "blue", "yellow")
 
         self.panel1.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self.panel2.grid(row=0, column=1, sticky="nsew", padx=1, pady=1)
@@ -148,7 +146,7 @@ class MainPage:
 
         self.panels.extend([self.panel1, self.panel2, self.panel3, self.panel4])
 
-    def create_panel(self, label_text):
+    def create_panel(self, label_text, x_color, y_color):
         panel = Frame(self.main_view_frame, bg="black", width=512, height=512)
         panel.pack_propagate(False)  # Prevent the panel from resizing to fit its contents
         panel.canvas = Canvas(panel, bg="black")
@@ -156,25 +154,26 @@ class MainPage:
         panel.bind("<Configure>", self.on_panel_resize)
 
         # Draw initial axes
-        self.draw_axes(panel.canvas)
+        self.draw_axes(panel, x_color, y_color)
 
         return panel
 
     def on_panel_resize(self, event):
-        # panel = event.widget
-        # size = min(panel.winfo_width(), panel.winfo_height())
-        # panel.config(width=size, height=size)
+        # Delay the execution to ensure the size update is complete
+        self.root.after(100, self.update_panel_images)
+
+    def update_panel_images(self):
         for num, pa in enumerate(self.panels):
             size = min(pa.winfo_width(), pa.winfo_height())
             pa.config(width=size, height=size)
             self.load_panel_image(pa, num)
-            
-    def draw_axes(self, canvas):
-        width = canvas.winfo_width()
-        height = canvas.winfo_height()
-        canvas.create_line(0, height // 2, width, height // 2, fill="white")  # x-axis
-        canvas.create_line(width // 2, 0, width // 2, height, fill="white")  # y-axis
-        
+
+    def draw_axes(self, panel, x_color, y_color):
+        width = panel.canvas.winfo_width()
+        height = panel.canvas.winfo_height()
+        panel.canvas.create_line(0, height // 2, width, height // 2, fill=x_color)  # x-axis
+        panel.canvas.create_line(width // 2, 0, width // 2, height, fill=y_color)  # y-axis
+
     def toggle_sidebar(self):
         if self.sidebar.winfo_viewable():
             self.sidebar.pack_forget()
@@ -234,24 +233,30 @@ class MainPage:
         self.update_panel_image(pa, image_2d)
 
     def update_panel_image(self, panel, image_data):
-        image = self.make_2d_image(image_data)
-        photo = ImageTk.PhotoImage(image=image)
+        image = self.make_2d_image(image_data) if image_data is not None else None
+        photo = ImageTk.PhotoImage(image=image) if image_data is not None else None
         panel.canvas.delete("all")  # Clear previous images and axes
 
         # Center the image
-        canvas_width = panel.canvas.winfo_width()
-        canvas_height = panel.canvas.winfo_height()
-        image_width = photo.width()
-        image_height = photo.height()
-        x = (canvas_width - image_width) // 2
-        y = (canvas_height - image_height) // 2
+        if photo:
+            canvas_width = panel.canvas.winfo_width()
+            canvas_height = panel.canvas.winfo_height()
+            image_width = photo.width()
+            image_height = photo.height()
+            x = (canvas_width - image_width) // 2
+            y = (canvas_height - image_height) // 2
+            panel.canvas.create_image(x, y, image=photo, anchor='nw')
+            panel.canvas.image = photo
 
-        panel.canvas.create_image(x, y, image=photo, anchor='nw')
-        panel.canvas.image = photo
-
-        # Redraw axes
-        panel.canvas.create_line(0, canvas_height // 2, canvas_width, canvas_height // 2, fill="white")  # x-axis
-        panel.canvas.create_line(canvas_width // 2, 0, canvas_width // 2, canvas_height, fill="white")  # y-axis
+        # Redraw axes with the correct colors
+        if panel == self.panel1:
+            self.draw_axes(panel, "white", "white")
+        elif panel == self.panel2:
+            self.draw_axes(panel, "magenta", "yellow")
+        elif panel == self.panel3:
+            self.draw_axes(panel, "blue", "magenta")
+        elif panel == self.panel4:
+            self.draw_axes(panel, "blue", "yellow")
 
     def load_dicom_images(self, folder_name):
         path = "./dicom-folder/" + folder_name
@@ -277,9 +282,12 @@ class MainPage:
         self.Y = img_shape[1] // 2
         self.Z = img_shape[2] // 2
         print("X,Y,Z: ", self.X, self.Y, self.Z)
-        
+
     def make_2d_image(self, image_2d):
-        normalized_image = ((image_2d - image_2d.min()) / (image_2d.max() - image_2d.min()) * 255).astype(np.uint8)
+        if image_2d.max() - image_2d.min() != 0:
+            normalized_image = ((image_2d - image_2d.min()) / (image_2d.max() - image_2d.min()) * 255).astype(np.uint8)
+        else:
+            normalized_image = np.zeros(image_2d.shape, dtype=np.uint8)
         height, width = normalized_image.shape
         image = Image.fromarray(normalized_image)
         return image
