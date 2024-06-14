@@ -146,15 +146,15 @@ class MainPage:
 
         self.panels.extend([self.panel1, self.panel2, self.panel3, self.panel4])
 
+        # Initial axes
+        self.update_panel_images()
+
     def create_panel(self, label_text, x_color, y_color):
         panel = Frame(self.main_view_frame, bg="black", width=512, height=512)
         panel.pack_propagate(False)  # Prevent the panel from resizing to fit its contents
         panel.canvas = Canvas(panel, bg="black")
         panel.canvas.pack(fill="both", expand=True, anchor="center")
         panel.bind("<Configure>", self.on_panel_resize)
-
-        # Draw initial axes
-        self.draw_axes(panel, x_color, y_color)
 
         return panel
 
@@ -167,6 +167,15 @@ class MainPage:
             size = min(pa.winfo_width(), pa.winfo_height())
             pa.config(width=size, height=size)
             self.load_panel_image(pa, num)
+            # Draw axes after loading the image
+            if num == 0:
+                self.draw_axes(pa, "white", "white")
+            elif num == 1:
+                self.draw_axes(pa, "magenta", "yellow")
+            elif num == 2:
+                self.draw_axes(pa, "blue", "magenta")
+            elif num == 3:
+                self.draw_axes(pa, "blue", "yellow")
 
     def draw_axes(self, panel, x_color, y_color):
         width = panel.canvas.winfo_width()
