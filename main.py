@@ -22,6 +22,9 @@ class MainPage:
         self.root.geometry("1200x800")
 
         self.panels = []
+        self.X_init = 256
+        self.Y_init = 256
+        self.Z_init = 256
         self.X = 256
         self.Y = 256
         self.Z = 256
@@ -109,14 +112,17 @@ class MainPage:
         slider.pack()
 
     def slider_changed(self, name, value):
+        z_ratio = 512/(self.Z_init)
         if name == "X Value":
             self.Y = int(value)
         elif name == "Y Value":
             self.X = int(value)
         elif name == "Z Value":
-            self.Z = int(int(value)/3.0843373494)
+            self.Z = -int(int(value)/z_ratio)
+            if self.Z == 0: # prevent img from being loop when self.Z == 0 because it the same number with -166
+                self.Z = -1
         self.update_images()
-        print(f"Slider changed: {name} to {int(value)}")
+        print(f"Slider changed: {name} to {int(self.Z)}")
 
     def init_main_view(self):
         self.main_view_frame = Frame(self.root)
@@ -188,7 +194,7 @@ class MainPage:
             self.selectedItem = self.list_view.get(selected_indices[0])
             self.IsSelectedItem = 1
             self.load_dicom_images(self.selectedItem)
-            self.update_images()
+            # self.update_images()
 
     def btnLoadPictures_Click(self):
         if self.IsSelectedItem == 0:
@@ -236,10 +242,14 @@ class MainPage:
             array2D = s.pixel_array
             self.volume3d[:, :, i] = array2D
 
+        self.X_init = img_shape[0]
+        self.Y_init = img_shape[1]
+        self.Z_init = img_shape[2]
         self.X = img_shape[0] // 2
         self.Y = img_shape[1] // 2
         self.Z = img_shape[2] // 2
         print("X,Y,Z: ", self.X, self.Y, self.Z)
+        
     def make_2d_image(self, image_2d):
         normalized_image = ((image_2d - image_2d.min()) / (image_2d.max() - image_2d.min()) * 255).astype(np.uint8)
         height, width = normalized_image.shape
