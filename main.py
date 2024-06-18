@@ -6,6 +6,8 @@ from tkinter import Tk, Frame, Label, Button, Menu, Listbox, filedialog, Scale, 
 from tkinter.ttk import Notebook
 from PIL import Image, ImageTk
 import shutil
+import rawpy
+import imageio
 
 class Vector3D:
     def __init__(self, x, y, z):
@@ -26,6 +28,7 @@ class MainPage:
         self.X = 256
         self.Y = 256
         self.Z = 256
+        self.Z_for_axis = 256
 
         self.thetaX = 0
         self.thetaY = 0
@@ -117,6 +120,7 @@ class MainPage:
             self.X = int(value)
         elif name == "Z Value":
             self.Z = -int(int(value) / z_ratio)
+            self.Z_for_axis = int(value)
             if self.Z == 0:  # prevent img from being loop when self.Z == 0 because it the same number with
                 self.Z = -1
         self.update_images()
@@ -169,18 +173,19 @@ class MainPage:
             self.load_panel_image(pa, num)
             # Draw axes after loading the image
             if num == 0:
-                self.draw_axes(pa, "white", "white")
+                self.draw_axes_center(pa, "white", "white")
             elif num == 1:
-                self.draw_axes(pa, "magenta", "yellow")
+                self.draw_axes_center(pa, "magenta", "yellow")
             elif num == 2:
-                self.draw_axes(pa, "blue", "magenta")
+                self.draw_axes_center(pa, "blue", "magenta")
             elif num == 3:
-                self.draw_axes(pa, "blue", "yellow")
+                self.draw_axes_center(pa, "blue", "yellow")
 
-    def draw_axes(self, panel, x_color, y_color):
+    def draw_axes_center(self, panel, x_color, y_color):
         panel.canvas.delete("axes")  # Clear previous axes
         width = panel.canvas.winfo_width()
         height = panel.canvas.winfo_height()
+        print("original", width, height)
         panel.canvas.create_line(0, height // 2, width, height // 2, fill=x_color, tags="axes")  # x-axis
         panel.canvas.create_line(width // 2, 0, width // 2, height, fill=y_color, tags="axes")  # y-axis
 
@@ -188,8 +193,11 @@ class MainPage:
         panel.canvas.delete("axes")  # Clear previous axes
         width = panel.canvas.winfo_width()
         height = panel.canvas.winfo_height()
-        panel.canvas.create_line(0, y_axis, width, y_axis, fill=x_color, tags="axes")  # x-axis
-        panel.canvas.create_line(x_axis, 0, x_axis, height, fill=y_color, tags="axes")  # y-axis
+        width_ratio = 512 / width
+        height_ratio = 512 / height
+        print("after", width, height)
+        panel.canvas.create_line(0, y_axis/height_ratio, width, y_axis/height_ratio, fill=x_color, tags="axes")  # x-axis
+        panel.canvas.create_line(x_axis/width_ratio, 0, x_axis/width_ratio, height, fill=y_color, tags="axes")  # y-axis
         
     def toggle_sidebar(self):
         if self.sidebar.winfo_viewable():
@@ -264,16 +272,14 @@ class MainPage:
             y = (canvas_height - image_height) // 2
             panel.canvas.create_image(x, y, image=photo, anchor='nw')
             panel.canvas.image = photo
-
+        print(self.X, self.Y, self.Z)
         # Redraw axes with the correct colors
         if panel == self.panel2:
-            self.draw_axes_value_change(panel, "white", "white", self.X, self.Y)
-        # elif panel == self.panel2:
-        #     self.draw_axes_value_change(panel, "magenta", "yellow")
-        # elif panel == self.panel3:
-        #     self.draw_axes_value_change(panel, "blue", "magenta")
-        # elif panel == self.panel4:
-        #     self.draw_axes_value_change(panel, "blue", "yellow")
+            self.draw_axes_value_change(panel, "magenta", "yellow", self.Y, self.X)
+        elif panel == self.panel3:
+            self.draw_axes_value_change(panel, "blue", "magenta", self.X, self.Z_for_axis)
+        elif panel == self.panel4:
+            self.draw_axes_value_change(panel, "blue", "yellow", self.Y, self.Z_for_axis)
 
     def load_dicom_images(self, folder_name):
         path = "./dicom-folder/" + folder_name
