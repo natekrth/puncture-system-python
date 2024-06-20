@@ -119,12 +119,24 @@ class MainPage:
         elif name == "Y Value":
             self.X = int(value)
         elif name == "Z Value":
-            self.Z = -int(int(value) / z_ratio)
             self.Z_for_axis = int(value)
-            if self.Z == 0:  # prevent img from being loop when self.Z == 0 because it the same number with
-                self.Z = -1
+            print(self.Z_for_axis)
+            low_end = 256 - (self.Z_init//2) - 9
+            upper_end = 256 + (self.Z_init//2)
+            upper_end_ratio = upper_end / self.Z_init
+            self.Z = int(value)
+            # self.Z = -int(int(value)/self.Z_for_axis)
+            # if self.Z >= low_end and self.Z <= upper_end:
+            if self.Z < low_end:
+                self.Z = 1234
+            elif self.Z > upper_end:
+                self.Z = 1234
+            else:
+                self.Z = -int(int(value) - low_end)
+                if self.Z == 0:  # prevent img from being loop when self.Z == 0 because it the same number with
+                    self.Z = -1
         self.update_images()
-        print(f"Slider changed: {name} to {int(self.Z)}")
+        print(f"Slider changed: {name} to {int(int(value) - low_end)}")
 
     def init_main_view(self):
         self.main_view_frame = Frame(self.root)
@@ -156,7 +168,7 @@ class MainPage:
     def create_panel(self, label_text, x_color, y_color):
         panel = Frame(self.main_view_frame, bg="black", width=512, height=512)
         panel.pack_propagate(False)  # Prevent the panel from resizing to fit its contents
-        panel.canvas = Canvas(panel, bg="black")
+        panel.canvas = Canvas(panel, bg="white")
         panel.canvas.pack(fill="both", expand=True, anchor="center")
         panel.bind("<Configure>", self.on_panel_resize)
 
@@ -175,17 +187,20 @@ class MainPage:
             if num == 0:
                 self.draw_axes_center(pa, "white", "white")
             elif num == 1:
-                self.draw_axes_center(pa, "magenta", "yellow")
+                # self.draw_axes_center(pa, "magenta", "yellow")
+                self.draw_axes_value_change(pa, "magenta", "yellow", self.Y, self.X)
             elif num == 2:
-                self.draw_axes_center(pa, "blue", "magenta")
+                # self.draw_axes_center(pa, "blue", "magenta")
+                self.draw_axes_value_change(pa, "blue", "magenta", self.X, self.Z_for_axis)
             elif num == 3:
-                self.draw_axes_center(pa, "blue", "yellow")
+                # self.draw_axes_center(pa, "blue", "yellow")
+                self.draw_axes_value_change(pa, "blue", "yellow", self.Y, self.Z_for_axis)
 
     def draw_axes_center(self, panel, x_color, y_color):
         panel.canvas.delete("axes")  # Clear previous axes
         width = panel.canvas.winfo_width()
         height = panel.canvas.winfo_height()
-        print("original", width, height)
+        # print("original", width, height)
         panel.canvas.create_line(0, height // 2, width, height // 2, fill=x_color, tags="axes")  # x-axis
         panel.canvas.create_line(width // 2, 0, width // 2, height, fill=y_color, tags="axes")  # y-axis
 
@@ -193,11 +208,17 @@ class MainPage:
         panel.canvas.delete("axes")  # Clear previous axes
         width = panel.canvas.winfo_width()
         height = panel.canvas.winfo_height()
+        # incase of the screen size is shrink or expand the panel canvas size will change
+        # find the ratio compared to 512 slider value
         width_ratio = 512 / width
         height_ratio = 512 / height
-        print("after", width, height)
-        panel.canvas.create_line(0, y_axis/height_ratio, width, y_axis/height_ratio, fill=x_color, tags="axes")  # x-axis
-        panel.canvas.create_line(x_axis/width_ratio, 0, x_axis/width_ratio, height, fill=y_color, tags="axes")  # y-axis
+        print("width, height", width, height)
+        if y_axis == self.Z_for_axis: # start the axis from the bottom
+            panel.canvas.create_line(0, (height-(y_axis/height_ratio)), width, (height-(y_axis/height_ratio)), fill=x_color, tags="axes")  # x-axis
+            panel.canvas.create_line(x_axis/width_ratio, 0, x_axis/width_ratio, height, fill=y_color, tags="axes")  # y-axis
+        else:
+            panel.canvas.create_line(0, y_axis/height_ratio, width, y_axis/height_ratio, fill=x_color, tags="axes")  # x-axis
+            panel.canvas.create_line(x_axis/width_ratio, 0, x_axis/width_ratio, height, fill=y_color, tags="axes")  # y-axis
         
     def toggle_sidebar(self):
         if self.sidebar.winfo_viewable():
@@ -272,7 +293,7 @@ class MainPage:
             y = (canvas_height - image_height) // 2
             panel.canvas.create_image(x, y, image=photo, anchor='nw')
             panel.canvas.image = photo
-        print(self.X, self.Y, self.Z)
+        # print(self.X, self.Y, self.Z)
         # Redraw axes with the correct colors
         if panel == self.panel2:
             self.draw_axes_value_change(panel, "magenta", "yellow", self.Y, self.X)
@@ -304,7 +325,7 @@ class MainPage:
         self.X = img_shape[0] // 2
         self.Y = img_shape[1] // 2
         self.Z = img_shape[2] // 2
-        print("X,Y,Z: ", self.X, self.Y, self.Z)
+        print("X,Y,Z: ", self.X_init, self.Y_init, self.Z_init)
 
     def make_2d_image(self, image_2d):
         if image_2d.max() - image_2d.min() != 0:
