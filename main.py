@@ -2,7 +2,7 @@ import sys
 import os
 import numpy as np
 import pydicom as dicom
-from tkinter import Tk, Frame, Label, Button, Menu, Listbox, filedialog, Scale, HORIZONTAL, END, Canvas, Scrollbar, VERTICAL, RIGHT, BOTTOM, X, Y
+from tkinter import Tk, Frame, Label, Button, Menu, Listbox, filedialog, Scale, HORIZONTAL,LEFT,END, Canvas, Scrollbar, VERTICAL, RIGHT, BOTTOM, X, Y, BOTH, TOP
 from tkinter.ttk import Notebook
 from PIL import Image, ImageTk
 import shutil
@@ -139,15 +139,18 @@ class MainPage:
         self.main_view_frame.pack(side="right", fill="both", expand=True)
 
         self.canvas = Canvas(self.main_view_frame)
-        self.canvas.pack(side="top", fill="both", expand=True)
+        self.canvas.grid(row=0, column=0, sticky="nsew")
 
         self.scrollbar_y = Scrollbar(self.main_view_frame, orient=VERTICAL, command=self.canvas.yview)
-        self.scrollbar_y.pack(side=RIGHT, fill=Y)
-        
-        self.scrollbar_x = Scrollbar(self.main_view_frame, orient=HORIZONTAL, command=self.canvas.xview)
-        self.scrollbar_x.pack(side=BOTTOM, fill=X)
+        self.scrollbar_y.grid(row=0, column=1, sticky="ns")
 
-        self.canvas.configure(yscrollcommand=self.scrollbar_y.set, xscrollcommand=self.scrollbar_x.set)
+        self.scrollbar_x = Scrollbar(self.main_view_frame, orient=HORIZONTAL, command=self.canvas.xview)
+        self.scrollbar_x.grid(row=1, column=0, sticky="ew")
+
+        self.main_view_frame.grid_rowconfigure(0, weight=1)
+        self.main_view_frame.grid_columnconfigure(0, weight=1)
+
+        self.canvas.configure(xscrollcommand=self.scrollbar_x.set, yscrollcommand=self.scrollbar_y.set)
         self.canvas.bind('<Configure>', lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
 
         self.content_frame = Frame(self.canvas)
@@ -155,6 +158,7 @@ class MainPage:
 
         self.init_panels()
 
+        
     def init_panels(self):
         self.panel1 = self.create_panel("3D", "white", "white")
         self.panel2 = self.create_panel("XY", "magenta", "yellow")
