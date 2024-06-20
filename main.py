@@ -2,12 +2,10 @@ import sys
 import os
 import numpy as np
 import pydicom as dicom
-from tkinter import Tk, Frame, Label, Button, Menu, Listbox, filedialog, Scale, HORIZONTAL, END, Canvas, Scrollbar, VERTICAL, RIGHT, Y
+from tkinter import Tk, Frame, Label, Button, Menu, Listbox, filedialog, Scale, HORIZONTAL, END, Canvas, Scrollbar, VERTICAL, RIGHT, BOTTOM, X, Y
 from tkinter.ttk import Notebook
 from PIL import Image, ImageTk
 import shutil
-import rawpy
-import imageio
 
 class Vector3D:
     def __init__(self, x, y, z):
@@ -125,11 +123,9 @@ class MainPage:
             upper_end = 256 + (self.Z_init//2)
             upper_end_ratio = upper_end / self.Z_init
             self.Z = int(value)
-            # self.Z = -int(int(value)/self.Z_for_axis)
-            # if self.Z >= low_end and self.Z <= upper_end:
-            if self.Z < low_end:
+            if self.Z < low_end: # set screen to black with z-value lower than low end of the image
                 self.Z = 1234
-            elif self.Z > upper_end:
+            elif self.Z > upper_end: # set screen to black with z-value higher than upper end of the image
                 self.Z = 1234
             else:
                 self.Z = -int(int(value) - low_end)
@@ -143,12 +139,15 @@ class MainPage:
         self.main_view_frame.pack(side="right", fill="both", expand=True)
 
         self.canvas = Canvas(self.main_view_frame)
-        self.canvas.pack(side="left", fill="both", expand=True)
+        self.canvas.pack(side="top", fill="both", expand=True)
 
-        self.scrollbar = Scrollbar(self.main_view_frame, orient=VERTICAL, command=self.canvas.yview)
-        self.scrollbar.pack(side=RIGHT, fill=Y)
+        self.scrollbar_y = Scrollbar(self.main_view_frame, orient=VERTICAL, command=self.canvas.yview)
+        self.scrollbar_y.pack(side=RIGHT, fill=Y)
+        
+        self.scrollbar_x = Scrollbar(self.main_view_frame, orient=HORIZONTAL, command=self.canvas.xview)
+        self.scrollbar_x.pack(side=BOTTOM, fill=X)
 
-        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.canvas.configure(yscrollcommand=self.scrollbar_y.set, xscrollcommand=self.scrollbar_x.set)
         self.canvas.bind('<Configure>', lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
 
         self.content_frame = Frame(self.canvas)
@@ -362,8 +361,29 @@ class MainPage:
         pass  # Implement zoom functionality
 
     def show_add_menu(self):
-        print("Show add menu")
-
+        menu2 = Menu(self.root, tearoff=0)
+        menu2.add_command(label="New window")
+        menu2.add_command(label="Axial cross section", command=self.add_panel_xy)
+        menu2.add_command(label="Sagittal section", command=self.add_panel_yz)
+        menu2.add_command(label="coronal section", command=self.add_panel_xz)
+        menu2.add_command(label="3D Structure")
+        menu2.add_command(label="Puncture needle position display")
+        menu2.add_command(label="Puncture needle route display")
+        menu2.add_command(label="Puncture route dispplay")
+        menu2.post(self.root.winfo_pointerx(), self.root.winfo_pointery())
+        
+    def add_panel_xy(self):
+        self.panel5 = self.create_panel("options", "white", "white")
+        self.panel5.grid(row=0, column=2, sticky="nsew", padx=1, pady=1)
+        self.panels.append(self.panel5)
+        self.load_panel_image(self.panel5, 1)
+        
+    def add_panel_yz(self):
+        pass
+    
+    def add_panel_xz(self):
+        pass
+    
     def load_pictures(self):
         pass  # Implement load pictures functionality
 
