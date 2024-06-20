@@ -2,7 +2,7 @@ import sys
 import os
 import numpy as np
 import pydicom as dicom
-from tkinter import Tk, Frame, Label, Button, Menu, Listbox, filedialog, Scale, HORIZONTAL, END, Canvas
+from tkinter import Tk, Frame, Label, Button, Menu, Listbox, filedialog, Scale, HORIZONTAL, END, Canvas, Scrollbar, VERTICAL, RIGHT, Y
 from tkinter.ttk import Notebook
 from PIL import Image, ImageTk
 import shutil
@@ -142,6 +142,18 @@ class MainPage:
         self.main_view_frame = Frame(self.root)
         self.main_view_frame.pack(side="right", fill="both", expand=True)
 
+        self.canvas = Canvas(self.main_view_frame)
+        self.canvas.pack(side="left", fill="both", expand=True)
+
+        self.scrollbar = Scrollbar(self.main_view_frame, orient=VERTICAL, command=self.canvas.yview)
+        self.scrollbar.pack(side=RIGHT, fill=Y)
+
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.canvas.bind('<Configure>', lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+
+        self.content_frame = Frame(self.canvas)
+        self.canvas.create_window((0, 0), window=self.content_frame, anchor="nw")
+
         self.init_panels()
 
     def init_panels(self):
@@ -155,10 +167,10 @@ class MainPage:
         self.panel3.grid(row=1, column=0, sticky="nsew", padx=1, pady=1)
         self.panel4.grid(row=1, column=1, sticky="nsew", padx=1, pady=1)
 
-        self.main_view_frame.grid_columnconfigure(0, weight=1)
-        self.main_view_frame.grid_columnconfigure(1, weight=1)
-        self.main_view_frame.grid_rowconfigure(0, weight=1)
-        self.main_view_frame.grid_rowconfigure(1, weight=1)
+        self.content_frame.grid_columnconfigure(0, weight=1, minsize=512)
+        self.content_frame.grid_columnconfigure(1, weight=1, minsize=512)
+        self.content_frame.grid_rowconfigure(0, weight=1, minsize=512)
+        self.content_frame.grid_rowconfigure(1, weight=1, minsize=512)
 
         self.panels.extend([self.panel1, self.panel2, self.panel3, self.panel4])
 
@@ -166,7 +178,7 @@ class MainPage:
         self.update_panel_images()
 
     def create_panel(self, label_text, x_color, y_color):
-        panel = Frame(self.main_view_frame, bg="black", width=512, height=512)
+        panel = Frame(self.content_frame, bg="black", width=512, height=512)
         panel.pack_propagate(False)  # Prevent the panel from resizing to fit its contents
         panel.canvas = Canvas(panel, bg="white")
         panel.canvas.pack(fill="both", expand=True, anchor="center")
