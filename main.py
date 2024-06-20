@@ -121,7 +121,7 @@ class MainPage:
         elif name == "Z Value":
             self.Z_for_axis = int(value)
             print(self.Z_for_axis)
-            low_end = 256 - (self.Z_init//2) - 9
+            low_end = 256 - (self.Z_init//2)
             upper_end = 256 + (self.Z_init//2)
             upper_end_ratio = upper_end / self.Z_init
             self.Z = int(value)
@@ -240,7 +240,7 @@ class MainPage:
 
     def show_file_menu(self):
         menu = Menu(self.root, tearoff=0)
-        menu.add_command(label="RAWデータ", command=self.input_button_click)
+        menu.add_command(label="DICOM Folder", command=self.input_button_click)
         menu.add_command(label="座標データ")
         menu.add_command(label="穿刺予定座標データ")
         menu.add_command(label="始点終点データ")
