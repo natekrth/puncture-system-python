@@ -2,10 +2,13 @@ import sys
 import os
 import numpy as np
 import pydicom as dicom
-from tkinter import Tk, Frame, Label, Button, Menu, Listbox, filedialog, Scale, HORIZONTAL,LEFT,END, Canvas, Scrollbar, VERTICAL, RIGHT, BOTTOM, X, Y, BOTH, TOP
+from tkinter import Tk, Frame, Label, Button, Menu, Listbox, filedialog, Scale, HORIZONTAL, LEFT, END, Canvas, Scrollbar, VERTICAL, RIGHT, BOTTOM, X, Y, BOTH, TOP
 from tkinter.ttk import Notebook
 from PIL import Image, ImageTk
 import shutil
+import SimpleITK as sitk
+import vtk
+from vtk.util import numpy_support
 
 class Vector3D:
     def __init__(self, x, y, z):
@@ -119,20 +122,20 @@ class MainPage:
         elif name == "Z Value":
             self.Z_for_axis = int(value)
             print(self.Z_for_axis)
-            low_end = 256 - (self.Z_init//2)
-            upper_end = 256 + (self.Z_init//2)
+            low_end = 256 - (self.Z_init // 2)
+            upper_end = 256 + (self.Z_init // 2)
             upper_end_ratio = upper_end / self.Z_init
             self.Z = int(value)
-            if self.Z < low_end: # set screen to black with z-value lower than low end of the image
+            if self.Z < low_end:  # set screen to black with z-value lower than low end of the image
                 self.Z = 1234
-            elif self.Z > upper_end: # set screen to black with z-value higher than upper end of the image
+            elif self.Z > upper_end:  # set screen to black with z-value higher than upper end of the image
                 self.Z = 1234
             else:
                 self.Z = -int(int(value) - low_end)
                 if self.Z == 0:  # prevent img from being loop when self.Z == 0 because it the same number with
                     self.Z = -1
         self.update_images()
-        print(f"Slider changed: {name} to {int(int(value) - low_end)}")
+        print(f"Slider changed: {name} to {int(value)}")
 
     def init_main_view(self):
         self.main_view_frame = Frame(self.root)
@@ -158,7 +161,6 @@ class MainPage:
 
         self.init_panels()
 
-        
     def init_panels(self):
         self.panel1 = self.create_panel("3D", "white", "white")
         self.panel2 = self.create_panel("XY", "magenta", "yellow")
@@ -186,7 +188,9 @@ class MainPage:
         panel.canvas = Canvas(panel, bg="white")
         panel.canvas.pack(fill="both", expand=True, anchor="center")
         panel.bind("<Configure>", self.on_panel_resize)
-
+        
+        panel.vtk_widget = None  # To store VTK widget
+        
         return panel
 
     def on_panel_resize(self, event):
@@ -199,23 +203,19 @@ class MainPage:
             pa.config(width=size, height=size)
             self.load_panel_image(pa, num)
             # Draw axes after loading the image
-            if num == 0:
-                self.draw_axes_center(pa, "white", "white")
-            elif num == 1:
-                # self.draw_axes_center(pa, "magenta", "yellow")
+            # if num == 0:
+                # self.draw_axes_center(pa, "white", "white")
+            if num == 1:
                 self.draw_axes_value_change(pa, "magenta", "yellow", self.Y, self.X)
             elif num == 2:
-                # self.draw_axes_center(pa, "blue", "magenta")
                 self.draw_axes_value_change(pa, "blue", "magenta", self.X, self.Z_for_axis)
             elif num == 3:
-                # self.draw_axes_center(pa, "blue", "yellow")
                 self.draw_axes_value_change(pa, "blue", "yellow", self.Y, self.Z_for_axis)
 
     def draw_axes_center(self, panel, x_color, y_color):
         panel.canvas.delete("axes")  # Clear previous axes
         width = panel.canvas.winfo_width()
         height = panel.canvas.winfo_height()
-        # print("original", width, height)
         panel.canvas.create_line(0, height // 2, width, height // 2, fill=x_color, tags="axes")  # x-axis
         panel.canvas.create_line(width // 2, 0, width // 2, height, fill=y_color, tags="axes")  # y-axis
 
@@ -223,18 +223,15 @@ class MainPage:
         panel.canvas.delete("axes")  # Clear previous axes
         width = panel.canvas.winfo_width()
         height = panel.canvas.winfo_height()
-        # incase of the screen size is shrink or expand the panel canvas size will change
-        # find the ratio compared to 512 slider value
         width_ratio = 512 / width
         height_ratio = 512 / height
-        print("width, height", width, height)
-        if y_axis == self.Z_for_axis: # start the axis from the bottom
-            panel.canvas.create_line(0, (height-(y_axis/height_ratio)), width, (height-(y_axis/height_ratio)), fill=x_color, tags="axes")  # x-axis
-            panel.canvas.create_line(x_axis/width_ratio, 0, x_axis/width_ratio, height, fill=y_color, tags="axes")  # y-axis
+        if y_axis == self.Z_for_axis:  # start the axis from the bottom
+            panel.canvas.create_line(0, (height - (y_axis / height_ratio)), width, (height - (y_axis / height_ratio)), fill=x_color, tags="axes")  # x-axis
+            panel.canvas.create_line(x_axis / width_ratio, 0, x_axis / width_ratio, height, fill=y_color, tags="axes")  # y-axis
         else:
-            panel.canvas.create_line(0, y_axis/height_ratio, width, y_axis/height_ratio, fill=x_color, tags="axes")  # x-axis
-            panel.canvas.create_line(x_axis/width_ratio, 0, x_axis/width_ratio, height, fill=y_color, tags="axes")  # y-axis
-        
+            panel.canvas.create_line(0, y_axis / height_ratio, width, y_axis / height_ratio, fill=x_color, tags="axes")  # x-axis
+            panel.canvas.create_line(x_axis / width_ratio, 0, x_axis / width_ratio, height, fill=y_color, tags="axes")  # y-axis
+
     def toggle_sidebar(self):
         if self.sidebar.winfo_viewable():
             self.sidebar.pack_forget()
@@ -268,7 +265,6 @@ class MainPage:
             self.selectedItem = self.list_view.get(selected_indices[0])
             self.IsSelectedItem = 1
             self.load_dicom_images(self.selectedItem)
-            # self.update_images()
 
     def btnLoadPictures_Click(self):
         if self.IsSelectedItem == 0:
@@ -308,7 +304,6 @@ class MainPage:
             y = (canvas_height - image_height) // 2
             panel.canvas.create_image(x, y, image=photo, anchor='nw')
             panel.canvas.image = photo
-        # print(self.X, self.Y, self.Z)
         # Redraw axes with the correct colors
         if panel == self.panel2:
             self.draw_axes_value_change(panel, "magenta", "yellow", self.Y, self.X)
@@ -341,6 +336,8 @@ class MainPage:
         self.Y = img_shape[1] // 2
         self.Z = img_shape[2] // 2
         print("X,Y,Z: ", self.X_init, self.Y_init, self.Z_init)
+
+        self.convert_to_vtk_image(self.volume3d)  # Convert to VTK image and display in panel1
 
     def make_2d_image(self, image_2d):
         if image_2d.max() - image_2d.min() != 0:
@@ -390,7 +387,66 @@ class MainPage:
     
     def load_pictures(self):
         pass  # Implement load pictures functionality
+    
+    def convert_to_vtk_image(self, volume3d):
+        vtk_image_data = vtk.vtkImageData()
 
+        depth, height, width = volume3d.shape
+        vtk_image_data.SetDimensions(width, height, depth)
+        
+        vtk_type = numpy_support.get_vtk_array_type(volume3d.dtype)
+        vtk_array = numpy_support.numpy_to_vtk(volume3d.ravel(), deep=True, array_type=vtk_type)
+        
+        vtk_image_data.GetPointData().SetScalars(vtk_array)
+        print(type(vtk_image_data))
+        self.visualize_vtk(vtk_image_data)
+
+    def visualize_vtk(self, vtk_image_data):
+        volume_mapper = vtk.vtkSmartVolumeMapper()
+        volume_mapper.SetInputData(vtk_image_data)
+
+        volume_property = vtk.vtkVolumeProperty()
+        volume_property.ShadeOn()
+        volume_property.SetInterpolationTypeToLinear()
+        
+        # Adjusting the opacity function for more transparency and brightness
+        composite_function = vtk.vtkPiecewiseFunction()
+        composite_function.AddPoint(0, 0.0)
+        composite_function.AddPoint(80, 0.05)  # Increased transparency
+        composite_function.AddPoint(255, 0.15)  # Increased transparency
+        
+        # Adjusting the color function for brightness and reduced contrast
+        color = vtk.vtkColorTransferFunction()
+        color.AddRGBPoint(0.0, 0.5, 0.5, 0.5)  # Darker Black (Gray)
+        color.AddRGBPoint(128.0, 0.75, 0.75, 0.75)  # Brighter Gray
+        color.AddRGBPoint(255.0, 1.0, 1.0, 1.0)  # White
+
+        volume_property.SetColor(color)
+        volume_property.SetScalarOpacity(composite_function)
+        
+        volume = vtk.vtkVolume()
+        volume.SetMapper(volume_mapper)
+        volume.SetProperty(volume_property)
+        
+        renderer = vtk.vtkRenderer()
+        renderer.AddVolume(volume)
+        renderer.SetBackground(0, 0, 0)
+        
+        render_window = vtk.vtkRenderWindow()
+        render_window.AddRenderer(renderer)
+        
+        render_window_interactor = vtk.vtkRenderWindowInteractor()
+        render_window_interactor.SetRenderWindow(render_window)
+
+        # Embedding VTK render window in Tkinter frame
+        panel = self.panel1
+        panel.vtk_widget = render_window_interactor
+        panel.vtk_widget.Initialize()
+        panel.vtk_widget.Start()
+        render_window.SetWindowInfo(f"{panel.canvas.winfo_id()}")
+        print(panel.canvas.winfo_id())
+        render_window.Render()
+        panel.vtk_widget.pack(side=TOP, fill=BOTH, expand=1)
 
 if __name__ == '__main__':
     root = Tk()
