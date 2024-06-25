@@ -7,8 +7,7 @@ from tkinter.ttk import Notebook
 from PIL import Image, ImageTk
 import shutil
 import SimpleITK as sitk
-import vtk
-from vtk.util import numpy_support
+from vispy import app, scene
 
 class Vector3D:
     def __init__(self, x, y, z):
@@ -189,8 +188,6 @@ class MainPage:
         panel.canvas.pack(fill="both", expand=True, anchor="center")
         panel.bind("<Configure>", self.on_panel_resize)
         
-        panel.vtk_widget = None  # To store VTK widget
-        
         return panel
 
     def on_panel_resize(self, event):
@@ -337,7 +334,7 @@ class MainPage:
         self.Z = img_shape[2] // 2
         print("X,Y,Z: ", self.X_init, self.Y_init, self.Z_init)
 
-        self.convert_to_vtk_image(self.volume3d)  # Convert to VTK image and display in panel1
+        self.visualize_vispy(self.volume3d)  # Use Vispy to visualize the image in panel1
 
     def make_2d_image(self, image_2d):
         if image_2d.max() - image_2d.min() != 0:
@@ -388,65 +385,18 @@ class MainPage:
     def load_pictures(self):
         pass  # Implement load pictures functionality
     
-    def convert_to_vtk_image(self, volume3d):
-        vtk_image_data = vtk.vtkImageData()
-
-        depth, height, width = volume3d.shape
-        vtk_image_data.SetDimensions(width, height, depth)
+    def visualize_vispy(self, volume3d):
         
-        vtk_type = numpy_support.get_vtk_array_type(volume3d.dtype)
-        vtk_array = numpy_support.numpy_to_vtk(volume3d.ravel(), deep=True, array_type=vtk_type)
+        canvas = scene.SceneCanvas(keys='interactive', show=True)
+        view = canvas.central_widget.add_view()
         
-        vtk_image_data.GetPointData().SetScalars(vtk_array)
-        print(type(vtk_image_data))
-        self.visualize_vtk(vtk_image_data)
-
-    def visualize_vtk(self, vtk_image_data):
-        volume_mapper = vtk.vtkSmartVolumeMapper()
-        volume_mapper.SetInputData(vtk_image_data)
-
-        volume_property = vtk.vtkVolumeProperty()
-        volume_property.ShadeOn()
-        volume_property.SetInterpolationTypeToLinear()
+        volume = scene.visuals.Volume(volume3d, parent=view.scene, threshold=0.225)
         
-        # Adjusting the opacity function for more transparency and brightness
-        composite_function = vtk.vtkPiecewiseFunction()
-        composite_function.AddPoint(0, 0.0)
-        composite_function.AddPoint(80, 0.05)  # Increased transparency
-        composite_function.AddPoint(255, 0.15)  # Increased transparency
+        view.camera = scene.cameras.TurntableCamera(parent=view.scene, fov=60)
+        view.camera.set_range()
         
-        # Adjusting the color function for brightness and reduced contrast
-        color = vtk.vtkColorTransferFunction()
-        color.AddRGBPoint(0.0, 0.5, 0.5, 0.5)  # Darker Black (Gray)
-        color.AddRGBPoint(128.0, 0.75, 0.75, 0.75)  # Brighter Gray
-        color.AddRGBPoint(255.0, 1.0, 1.0, 1.0)  # White
-
-        volume_property.SetColor(color)
-        volume_property.SetScalarOpacity(composite_function)
-        
-        volume = vtk.vtkVolume()
-        volume.SetMapper(volume_mapper)
-        volume.SetProperty(volume_property)
-        
-        renderer = vtk.vtkRenderer()
-        renderer.AddVolume(volume)
-        renderer.SetBackground(0, 0, 0)
-        
-        render_window = vtk.vtkRenderWindow()
-        render_window.AddRenderer(renderer)
-        
-        render_window_interactor = vtk.vtkRenderWindowInteractor()
-        render_window_interactor.SetRenderWindow(render_window)
-
-        # Embedding VTK render window in Tkinter frame
-        panel = self.panel1
-        panel.vtk_widget = render_window_interactor
-        panel.vtk_widget.Initialize()
-        panel.vtk_widget.Start()
-        render_window.SetWindowInfo(f"{panel.canvas.winfo_id()}")
-        print(panel.canvas.winfo_id())
-        render_window.Render()
-        panel.vtk_widget.pack(side=TOP, fill=BOTH, expand=1)
+        canvas.native.master = self.panel1
+        canvas.native.pack(side=TOP, fill=BOTH, expand=1)
 
 if __name__ == '__main__':
     root = Tk()
