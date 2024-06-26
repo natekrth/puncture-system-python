@@ -1,5 +1,7 @@
 import sys
 import os
+import csv
+import math
 import numpy as np
 import pydicom as dicom
 from tkinter import Tk, Frame, Label, Button, Menu, Listbox, filedialog, Scale, HORIZONTAL, LEFT, END, Canvas, Scrollbar, VERTICAL, RIGHT, BOTTOM, X, Y, BOTH, TOP
@@ -15,6 +17,11 @@ class Vector3D:
         self.y = y
         self.z = z
 
+class NeedleInfo:
+    def __init__(self, point, vector):
+        self.point = point
+        self.vector = vector
+        
 class MainPage:
     def __init__(self, root):
         self.root = root
@@ -46,6 +53,8 @@ class MainPage:
         self.MaxCTvalue = 0
         self.CT_Ajust = -1000  # Example value, adjust accordingly
 
+        self.needleVector = []
+        self.ok = 0
         self.init_toolbar()
         self.init_sidebar()
         self.init_main_view()
@@ -184,7 +193,7 @@ class MainPage:
     def create_panel(self, label_text, x_color, y_color):
         panel = Frame(self.content_frame, bg="black", width=512, height=512)
         panel.pack_propagate(False)  # Prevent the panel from resizing to fit its contents
-        panel.canvas = Canvas(panel, bg="white")
+        panel.canvas = Canvas(panel, bg="black")
         panel.canvas.pack(fill="both", expand=True, anchor="center")
         panel.bind("<Configure>", self.on_panel_resize)
         
@@ -228,7 +237,7 @@ class MainPage:
         else:
             panel.canvas.create_line(0, y_axis / height_ratio, width, y_axis / height_ratio, fill=x_color, tags="axes")  # x-axis
             panel.canvas.create_line(x_axis / width_ratio, 0, x_axis / width_ratio, height, fill=y_color, tags="axes")  # y-axis
-
+    
     def toggle_sidebar(self):
         if self.sidebar.winfo_viewable():
             self.sidebar.pack_forget()
@@ -238,9 +247,9 @@ class MainPage:
     def show_file_menu(self):
         menu = Menu(self.root, tearoff=0)
         menu.add_command(label="DICOM Folder", command=self.input_button_click)
-        menu.add_command(label="座標データ")
-        menu.add_command(label="穿刺予定座標データ")
-        menu.add_command(label="始点終点データ")
+        menu.add_command(label="Coordinate Data")
+        menu.add_command(label="Puncture Planned Coordinate Data", command=self.input_plan_coor_data)
+        menu.add_command(label="Start Point End Point Data")
         menu.post(self.root.winfo_pointerx(), self.root.winfo_pointery())
 
     def input_button_click(self):
@@ -289,7 +298,8 @@ class MainPage:
     def update_panel_image(self, panel, image_data):
         image = self.make_2d_image(image_data) if image_data is not None else None
         photo = ImageTk.PhotoImage(image=image) if image_data is not None else None
-        panel.canvas.delete("all")  # Clear previous images and axes
+        panel.canvas.delete("axes")  # Clear previous images and axes
+        panel.canvas.delete("images")
 
         # Center the image
         if photo:
@@ -357,7 +367,7 @@ class MainPage:
 
     def zoom(self, factor):
         pass  # Implement zoom functionality
-
+        
     def show_add_menu(self):
         menu2 = Menu(self.root, tearoff=0)
         menu2.add_command(label="New window")
@@ -385,8 +395,54 @@ class MainPage:
     def load_pictures(self):
         pass  # Implement load pictures functionality
     
-    def visualize_vispy(self, volume3d):
+    def input_plan_coor_data(self):
+        # Open file dialog to select a CSV file
+        file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
+        if not file_path:
+            return
+
+        with open(file_path, newline='') as csvfile:
+            csv_reader = csv.reader(csvfile)
+            for row in csv_reader:
+                a = float(row[0])
+                b = float(row[1])
+                c = float(row[2])
+                point = Vector3D(a, b, c)
+
+                d = float(row[3])
+                e = float(row[4])
+                f = float(row[5])
+                S = math.sqrt(d * d + e * e + f * f)
+
+                vector = Vector3D(d / S, e / S, f / S)  # Normalized vector
+                needle_info = NeedleInfo(point, vector)
+                self.needleVector.append(needle_info)
+                print(needle_info.point.x, needle_info.point.y, needle_info.point.z)
+                print(needle_info.vector.x, needle_info.vector.y, needle_info.vector.z)
         
+        self.draw_needle_plan()
+    
+    def draw_needle_plan(self):
+        for needle in self.needleVector:
+            for panel, plane in zip([self.panel2, self.panel3, self.panel4], ["xy", "yz", "xz"]):
+                if plane == "xy":
+                    x0, y0 = needle.point.x, needle.point.y
+                    x1, y1 = x0 + needle.vector.x * 100, y0 + needle.vector.y * 100
+                elif plane == "yz":
+                    x0, y0 = needle.point.y, needle.point.z
+                    x1, y1 = x0 + needle.vector.y * 100, y0 + needle.vector.z * 100
+                elif plane == "xz":
+                    x0, y0 = needle.point.x, needle.point.z
+                    x1, y1 = x0 + needle.vector.x * 100, y0 + needle.vector.z * 100
+
+                x0 = x0 * (panel.canvas.winfo_width() / 512)
+                y0 = y0 * (panel.canvas.winfo_height() / 512)
+                x1 = x1 * (panel.canvas.winfo_width() / 512)
+                y1 = y1 * (panel.canvas.winfo_height() / 512)
+
+                panel.canvas.create_line(x0, y0, x1, y1, fill="red", width=1, tags="needle")
+
+    def visualize_vispy(self, volume3d):
         canvas = scene.SceneCanvas(keys='interactive', show=True)
         view = canvas.central_widget.add_view()
         
