@@ -191,17 +191,17 @@ class MainPage:
         self.update_panel_images()
 
     def create_panel(self, label_text, x_color, y_color):
-        panel = Frame(self.content_frame, bg="black", width=512, height=512)
+        panel = Frame(self.content_frame, bg="white", width=512, height=512)
         panel.pack_propagate(False)  # Prevent the panel from resizing to fit its contents
-        panel.canvas = Canvas(panel, bg="black")
+        panel.canvas = Canvas(panel, bg="white")
         panel.canvas.pack(fill="both", expand=True, anchor="center")
-        panel.bind("<Configure>", self.on_panel_resize)
+        # panel.bind("<Configure>", self.on_panel_resize)
         
         return panel
 
-    def on_panel_resize(self, event):
+    # def on_panel_resize(self, event):
         # Delay the execution to ensure the size update is complete
-        self.root.after(100, self.update_panel_images)
+        # self.root.after(100, self.update_panel_images)
 
     def update_panel_images(self):
         for num, pa in enumerate(self.panels):
@@ -284,12 +284,16 @@ class MainPage:
         try:
             if num == 1:  # Axial view XY
                 image_2d = self.volume3d[:, :, self.Z]
+                self.draw_needle_plan()
             elif num == 2:  # Sagittal view YZ
                 image_2d = np.flipud(np.rot90(self.volume3d[:, self.Y, :]))
+                self.draw_needle_plan()
             elif num == 3:  # Coronal view XZ
                 image_2d = np.flipud(np.rot90(self.volume3d[self.X, :, :]))
+                self.draw_needle_plan()
             else:
                 image_2d = np.zeros((512, 512), dtype=np.int16)  # Placeholder for the 3D view
+                self.draw_needle_plan()
         except IndexError:
             image_2d = np.zeros((512, 512), dtype=np.int16)  # Set the panel to black screen in case of error
 
