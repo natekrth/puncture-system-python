@@ -90,9 +90,6 @@ class MainPage:
         zoom_out_button = Button(self.toolbar, text="ZoomOut", command=self.zoom_out)
         zoom_out_button.pack(side="left")
 
-        load_pictures_button = Button(self.toolbar, text="Load Pictures", command=self.load_pictures)
-        load_pictures_button.pack(side="left")
-
     def init_sidebar(self):
         self.sidebar = Frame(self.root)
         self.sidebar.pack(side="left", fill="y")
@@ -284,20 +281,17 @@ class MainPage:
         try:
             if num == 1:  # Axial view XY
                 image_2d = self.volume3d[:, :, self.Z]
-                self.draw_needle_plan()
             elif num == 2:  # Sagittal view YZ
                 image_2d = np.flipud(np.rot90(self.volume3d[:, self.Y, :]))
-                self.draw_needle_plan()
             elif num == 3:  # Coronal view XZ
                 image_2d = np.flipud(np.rot90(self.volume3d[self.X, :, :]))
-                self.draw_needle_plan()
             else:
                 image_2d = np.zeros((512, 512), dtype=np.int16)  # Placeholder for the 3D view
-                self.draw_needle_plan()
         except IndexError:
             image_2d = np.zeros((512, 512), dtype=np.int16)  # Set the panel to black screen in case of error
 
         self.update_panel_image(pa, image_2d)
+        self.draw_needle_plan()
 
     def update_panel_image(self, panel, image_data):
         image = self.make_2d_image(image_data) if image_data is not None else None
@@ -396,8 +390,6 @@ class MainPage:
     def add_panel_xz(self):
         pass
     
-    def load_pictures(self):
-        pass  # Implement load pictures functionality
     
     def input_plan_coor_data(self):
         # Open file dialog to select a CSV file
@@ -438,6 +430,7 @@ class MainPage:
                 elif plane == "xz":
                     x0, y0 = needle.point.x, needle.point.z
                     x1, y1 = x0 + needle.vector.x * 100, y0 + needle.vector.z * 100
+                    print("asdfasd")
 
                 x0 = x0 * (panel.canvas.winfo_width() / 512)
                 y0 = y0 * (panel.canvas.winfo_height() / 512)
