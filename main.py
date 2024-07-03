@@ -8,8 +8,9 @@ from tkinter import Tk, Frame, Label, Button, Menu, Listbox, filedialog, Scale, 
 from tkinter.ttk import Notebook
 from PIL import Image, ImageTk
 import shutil
-import SimpleITK as sitk
 from vispy import app, scene
+from pyopengltk import OpenGLFrame
+from OpenGL.GL import *
 
 class Vector3D:
     def __init__(self, x, y, z):
@@ -188,39 +189,23 @@ class MainPage:
         self.update_panel_images()
 
     def create_panel(self, label_text, x_color, y_color):
-        panel = Frame(self.content_frame, bg="white", width=512, height=512)
+        panel = Frame(self.content_frame, bg="black", width=512, height=512)
         panel.pack_propagate(False)  # Prevent the panel from resizing to fit its contents
-        panel.canvas = Canvas(panel, bg="white")
+        panel.canvas = Canvas(panel, bg="black")
         panel.canvas.pack(fill="both", expand=True, anchor="center")
-        # panel.bind("<Configure>", self.on_panel_resize)
-        
         return panel
-
-    # def on_panel_resize(self, event):
-        # Delay the execution to ensure the size update is complete
-        # self.root.after(100, self.update_panel_images)
 
     def update_panel_images(self):
         for num, pa in enumerate(self.panels):
             size = min(pa.winfo_width(), pa.winfo_height())
             pa.config(width=size, height=size)
             self.load_panel_image(pa, num)
-            # Draw axes after loading the image
-            # if num == 0:
-                # self.draw_axes_center(pa, "white", "white")
             if num == 1:
                 self.draw_axes_value_change(pa, "magenta", "yellow", self.Y, self.X)
             elif num == 2:
                 self.draw_axes_value_change(pa, "blue", "magenta", self.X, self.Z_for_axis)
             elif num == 3:
                 self.draw_axes_value_change(pa, "blue", "yellow", self.Y, self.Z_for_axis)
-
-    def draw_axes_center(self, panel, x_color, y_color):
-        panel.canvas.delete("axes")  # Clear previous axes
-        width = panel.canvas.winfo_width()
-        height = panel.canvas.winfo_height()
-        panel.canvas.create_line(0, height // 2, width, height // 2, fill=x_color, tags="axes")  # x-axis
-        panel.canvas.create_line(width // 2, 0, width // 2, height, fill=y_color, tags="axes")  # y-axis
 
     def draw_axes_value_change(self, panel, x_color, y_color, x_axis, y_axis):
         panel.canvas.delete("axes")  # Clear previous axes
@@ -244,7 +229,7 @@ class MainPage:
     def show_file_menu(self):
         menu = Menu(self.root, tearoff=0)
         menu.add_command(label="DICOM Folder", command=self.input_button_click)
-        menu.add_command(label="Coordinate Data")
+        menu.add_command(label="Coordinate Data Target")
         menu.add_command(label="Puncture Planned Coordinate Data", command=self.input_plan_coor_data)
         menu.add_command(label="Start Point End Point Data")
         menu.post(self.root.winfo_pointerx(), self.root.winfo_pointery())
@@ -274,6 +259,7 @@ class MainPage:
             return
         for num, pa in enumerate(self.panels):
             self.load_panel_image(pa, num)
+        self.visualize_vispy(self.volume3d)  # Use Vispy to visualize the image in panel1
 
     def load_panel_image(self, pa, num):
         if self.IsSelectedItem == 0:
@@ -342,8 +328,6 @@ class MainPage:
         self.Z = img_shape[2] // 2
         print("X,Y,Z: ", self.X_init, self.Y_init, self.Z_init)
 
-        self.visualize_vispy(self.volume3d)  # Use Vispy to visualize the image in panel1
-
     def make_2d_image(self, image_2d):
         if image_2d.max() - image_2d.min() != 0:
             normalized_image = ((image_2d - image_2d.min()) / (image_2d.max() - image_2d.min()) * 255).astype(np.uint8)
@@ -390,7 +374,6 @@ class MainPage:
     def add_panel_xz(self):
         pass
     
-    
     def input_plan_coor_data(self):
         # Open file dialog to select a CSV file
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
@@ -430,8 +413,6 @@ class MainPage:
                 elif plane == "xz":
                     x0, y0 = needle.point.x, needle.point.z
                     x1, y1 = x0 + needle.vector.x * 100, y0 + needle.vector.z * 100
-                    print("asdfasd")
-
                 x0 = x0 * (panel.canvas.winfo_width() / 512)
                 y0 = y0 * (panel.canvas.winfo_height() / 512)
                 x1 = x1 * (panel.canvas.winfo_width() / 512)
@@ -440,16 +421,21 @@ class MainPage:
                 panel.canvas.create_line(x0, y0, x1, y1, fill="red", width=1, tags="needle")
 
     def visualize_vispy(self, volume3d):
-        canvas = scene.SceneCanvas(keys='interactive', show=True)
-        view = canvas.central_widget.add_view()
-        
-        volume = scene.visuals.Volume(volume3d, parent=view.scene, threshold=0.225)
-        
-        view.camera = scene.cameras.TurntableCamera(parent=view.scene, fov=60)
-        view.camera.set_range()
-        
-        canvas.native.master = self.panel1
-        canvas.native.pack(side=TOP, fill=BOTH, expand=1)
+        class VispyFrame(OpenGLFrame):
+            def initgl(self):
+                canvas = scene.SceneCanvas(keys='interactive', show=True)
+                view = canvas.central_widget.add_view()
+                volume = scene.visuals.Volume(volume3d, parent=view.scene, threshold=0.225)
+                view.camera = scene.cameras.TurntableCamera(parent=view.scene, fov=60)
+                view.camera.set_range()
+                self.canvas = canvas
+
+            def redraw(self):
+                self.canvas.update()
+
+        self.vispy_frame = VispyFrame(self.panel1)
+        self.vispy_frame.pack(side=TOP, fill=BOTH, expand=1)
+        self.vispy_frame.animate = 1
 
 if __name__ == '__main__':
     root = Tk()
