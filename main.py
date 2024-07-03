@@ -8,9 +8,10 @@ from tkinter import Tk, Frame, Label, Button, Menu, Listbox, filedialog, Scale, 
 from tkinter.ttk import Notebook
 from PIL import Image, ImageTk
 import shutil
+import SimpleITK as sitk
 from vispy import app, scene
-from pyopengltk import OpenGLFrame
-from OpenGL.GL import *
+from vispy.scene import visuals
+from threading import Timer
 
 class Vector3D:
     def __init__(self, x, y, z):
@@ -62,6 +63,7 @@ class MainPage:
 
         self.dataList = []
         self.selectedItem = None
+        self.file_path = None  # To store the CSV file path
 
     def init_toolbar(self):
         self.toolbar = Frame(self.root)
@@ -193,6 +195,7 @@ class MainPage:
         panel.pack_propagate(False)  # Prevent the panel from resizing to fit its contents
         panel.canvas = Canvas(panel, bg="black")
         panel.canvas.pack(fill="both", expand=True, anchor="center")
+        
         return panel
 
     def update_panel_images(self):
@@ -207,6 +210,13 @@ class MainPage:
             elif num == 3:
                 self.draw_axes_value_change(pa, "blue", "yellow", self.Y, self.Z_for_axis)
 
+    def draw_axes_center(self, panel, x_color, y_color):
+        panel.canvas.delete("axes")  # Clear previous axes
+        width = panel.canvas.winfo_width()
+        height = panel.canvas.winfo_height()
+        panel.canvas.create_line(0, height // 2, width, height // 2, fill=x_color, tags="axes")  # x-axis
+        panel.canvas.create_line(width // 2, 0, width // 2, height, fill=y_color, tags="axes")  # y-axis
+
     def draw_axes_value_change(self, panel, x_color, y_color, x_axis, y_axis):
         panel.canvas.delete("axes")  # Clear previous axes
         width = panel.canvas.winfo_width()
@@ -214,11 +224,11 @@ class MainPage:
         width_ratio = 512 / width
         height_ratio = 512 / height
         if y_axis == self.Z_for_axis:  # start the axis from the bottom
-            panel.canvas.create_line(0, (height - (y_axis / height_ratio)), width, (height - (y_axis / height_ratio)), fill=x_color, tags="axes")  # x-axis
-            panel.canvas.create_line(x_axis / width_ratio, 0, x_axis / width_ratio, height, fill=y_color, tags="axes")  # y-axis
+            panel.canvas.create_line(0, (height - (y_axis / height_ratio)), width, (height - (y_axis / height_ratio)), fill=x_color, tags="axes")
+            panel.canvas.create_line(x_axis / width_ratio, 0, x_axis / width_ratio, height, fill=y_color, tags="axes")
         else:
-            panel.canvas.create_line(0, y_axis / height_ratio, width, y_axis / height_ratio, fill=x_color, tags="axes")  # x-axis
-            panel.canvas.create_line(x_axis / width_ratio, 0, x_axis / width_ratio, height, fill=y_color, tags="axes")  # y-axis
+            panel.canvas.create_line(0, y_axis / height_ratio, width, y_axis / height_ratio, fill=x_color, tags="axes")
+            panel.canvas.create_line(x_axis / width_ratio, 0, x_axis / width_ratio, height, fill=y_color, tags="axes")
     
     def toggle_sidebar(self):
         if self.sidebar.winfo_viewable():
@@ -229,7 +239,7 @@ class MainPage:
     def show_file_menu(self):
         menu = Menu(self.root, tearoff=0)
         menu.add_command(label="DICOM Folder", command=self.input_button_click)
-        menu.add_command(label="Coordinate Data Target")
+        menu.add_command(label="Coordinate Data Target", command=self.update_dots_from_csv)
         menu.add_command(label="Puncture Planned Coordinate Data", command=self.input_plan_coor_data)
         menu.add_command(label="Start Point End Point Data")
         menu.post(self.root.winfo_pointerx(), self.root.winfo_pointery())
@@ -259,7 +269,6 @@ class MainPage:
             return
         for num, pa in enumerate(self.panels):
             self.load_panel_image(pa, num)
-        self.visualize_vispy(self.volume3d)  # Use Vispy to visualize the image in panel1
 
     def load_panel_image(self, pa, num):
         if self.IsSelectedItem == 0:
@@ -328,6 +337,8 @@ class MainPage:
         self.Z = img_shape[2] // 2
         print("X,Y,Z: ", self.X_init, self.Y_init, self.Z_init)
 
+        self.visualize_vispy(self.volume3d)  # Use Vispy to visualize the image in panel1
+
     def make_2d_image(self, image_2d):
         if image_2d.max() - image_2d.min() != 0:
             normalized_image = ((image_2d - image_2d.min()) / (image_2d.max() - image_2d.min()) * 255).astype(np.uint8)
@@ -375,7 +386,6 @@ class MainPage:
         pass
     
     def input_plan_coor_data(self):
-        # Open file dialog to select a CSV file
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if not file_path:
             return
@@ -413,6 +423,7 @@ class MainPage:
                 elif plane == "xz":
                     x0, y0 = needle.point.x, needle.point.z
                     x1, y1 = x0 + needle.vector.x * 100, y0 + needle.vector.z * 100
+
                 x0 = x0 * (panel.canvas.winfo_width() / 512)
                 y0 = y0 * (panel.canvas.winfo_height() / 512)
                 x1 = x1 * (panel.canvas.winfo_width() / 512)
@@ -421,21 +432,41 @@ class MainPage:
                 panel.canvas.create_line(x0, y0, x1, y1, fill="red", width=1, tags="needle")
 
     def visualize_vispy(self, volume3d):
-        class VispyFrame(OpenGLFrame):
-            def initgl(self):
-                canvas = scene.SceneCanvas(keys='interactive', show=True)
-                view = canvas.central_widget.add_view()
-                volume = scene.visuals.Volume(volume3d, parent=view.scene, threshold=0.225)
-                view.camera = scene.cameras.TurntableCamera(parent=view.scene, fov=60)
-                view.camera.set_range()
-                self.canvas = canvas
+        self.canvas = scene.SceneCanvas(keys='interactive', show=True)
+        self.view = self.canvas.central_widget.add_view()
+        
+        self.volume = scene.visuals.Volume(volume3d, parent=self.view.scene, threshold=0.225)
+        
+        self.view.camera = scene.cameras.TurntableCamera(parent=self.view.scene, fov=60)
+        self.view.camera.set_range()
+        
+        self.scatter = visuals.Markers()
+        self.view.add(self.scatter)
+        
+        self.canvas.native.master = self.panel1
+        self.canvas.native.pack(side=TOP, fill=BOTH, expand=1)
+        
+    def update_dots_from_csv(self):
+        if self.file_path is None:
+            self.file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
+            if not self.file_path:
+                return
 
-            def redraw(self):
-                self.canvas.update()
+        points = []
+        with open(self.file_path, newline='') as csvfile:
+            csv_reader = csv.reader(csvfile)
+            for row in csv_reader:
+                x = float(row[0])
+                y = float(row[1])
+                z = float(row[2])
+                points.append([x, y, z])
 
-        self.vispy_frame = VispyFrame(self.panel1)
-        self.vispy_frame.pack(side=TOP, fill=BOTH, expand=1)
-        self.vispy_frame.animate = 1
+        points = np.array(points)
+        self.scatter.set_data(points, face_color=(1, 0, 0, 1), size=5)
+
+        # Update every second
+        self.timer = Timer(1, self.update_dots_from_csv)
+        self.timer.start()
 
 if __name__ == '__main__':
     root = Tk()
