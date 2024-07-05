@@ -3,3 +3,4 @@ pydicom==2.4.4
 Pillow==9.4.0
 tk==0.1.0
 vispy
+PyOpenGL==3.1.7
