@@ -8,7 +8,6 @@ from tkinter import Tk, Frame, Label, Button, Menu, Listbox, filedialog, Scale, 
 from tkinter.ttk import Notebook
 from PIL import Image, ImageTk
 import shutil
-import SimpleITK as sitk
 from vispy import app, scene
 from vispy.scene import visuals
 from threading import Timer
@@ -461,88 +460,6 @@ class MainPage:
         
         self.canvas.native.master = self.panel1
         self.canvas.native.pack(side=TOP, fill=BOTH, expand=1)
-        
-    # def update_dots_from_csv(self):
-    #     file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
-    #     if not file_path:
-    #         return
-
-    #     points = []
-    #     with open(file_path, newline='') as csvfile:
-    #         csv_reader = csv.reader(csvfile)
-    #         for row in csv_reader:
-    #             x = float(row[0])
-    #             y = float(row[1])
-    #             z = float(row[2])
-    #             points.append([x, y, z])
-
-    #     points = np.array(points)
-    #     self.scatter.set_data(points, face_color=(1, 0, 0, 1), size=5)
-
-    #     self.timer = Timer(5, self.update_dots_from_csv)
-    #     self.timer.start()
-
-    # def timer_update(self):
-    #     if self._count >= len(self.needleVector) or self.IsSelectedItem == 0: 
-    #         return
-
-    #     nvector3D = self.needleVector[self._count]
-    #     point = nvector3D.point
-    #     vector = nvector3D.vector
-
-    #     P_angle = math.atan2(vector.z, vector.x)
-    #     R = self.make_y_rotation_matrix(-P_angle)
-
-    #     # Im = self.selectedItem.ImageData.copy()
-
-    #     P = Vector3D(
-    #         x=point.x - self.X_init,
-    #         y=point.y - self.Y_init,
-    #         z=point.z - self.Z_init
-    #     )
-
-    #     needle = self.calculation_matrix_3x1(R, P)
-    #     needle.x += 256
-    #     needle.y += 256
-    #     needle.z += 256
-
-    #     # self.make_3d_needle_array(Im, P_angle)
-    #     print(needle.x, needle.y, needle.z)
-    #     for pa in self.panels:
-    #         if pa == self.panel1:
-    #             x, y = needle.point.x, needle.point.y
-    #             x = x * (pa.canvas.winfo_width() / 512)
-    #             y = y * (pa.canvas.winfo_height() / 512)
-    #             pa.canvas.create_oval(x-2, y-2, x+2, y+2, fill="red", outline="red", tags="needle")
-
-    #             # image_2d = self.make_2d_array_xy(self.NeedleMatrix3D, int(abs(needle.z - 512) - 1))
-    #             # self.draw_axes_value_change(pa, "blue", "yellow", needle.x, needle.y)
-        
-    #     self._count += 1
-    #     self.timer = Timer(0.5, self.timer_update)
-    #     self.timer.start()
-
-    # def make_y_rotation_matrix(self, angle):
-    #     cos_a = math.cos(angle)
-    #     sin_a = math.sin(angle)
-    #     return np.array([
-    #         [cos_a, 0, -sin_a],
-    #         [0, 1, 0],
-    #         [sin_a, 0, cos_a]
-    #     ])
-
-    # def calculation_matrix_3x1(self, R, P):
-    #     P_matrix = np.array([P.x, P.y, P.z])
-    #     result = np.dot(R, P_matrix)
-    #     return Vector3D(result[0], result[1], result[2])
-
-    # def make_3d_needle_array(self, Im, P_angle):
-    #     # Implement the method to populate NeedleMatrix3D with rotated data
-    #     pass
-
-    # def make_2d_array_xy(self, matrix_3d, index):
-    #     # Implement the method to create a 2D array from the 3D needle matrix
-    #     pass
 
 if __name__ == '__main__':
     root = Tk()
