@@ -23,11 +23,11 @@ class NeedleInfo:
     def __init__(self, point, vector):
         self.point = point
         self.vector = vector
-        
+
 class MainPage:
     def __init__(self, root):
         self.root = root
-        self.root.title("MR_PunctureSystem")
+        self.root.title("Puncture System")
         self.root.geometry("1200x800")
 
         self.panels = []
@@ -57,13 +57,15 @@ class MainPage:
 
         self.needleVector = []
         self.ok = 0
+        self._count = 0
+        self.timer = None
+        self.selectedItem = None
+
         self.init_toolbar()
         self.init_sidebar()
         self.init_main_view()
 
         self.dataList = []
-        self.selectedItem = None
-        self.file_path = None  # To store the CSV file path
 
     def init_toolbar(self):
         self.toolbar = Frame(self.root)
@@ -129,7 +131,6 @@ class MainPage:
             self.X = int(value)
         elif name == "Z Value":
             self.Z_for_axis = int(value)
-            print(self.Z_for_axis)
             low_end = 256 - (self.Z_init // 2)
             upper_end = 256 + (self.Z_init // 2)
             upper_end_ratio = upper_end / self.Z_init
@@ -174,20 +175,24 @@ class MainPage:
         self.panel2 = self.create_panel("XY", "magenta", "yellow")
         self.panel3 = self.create_panel("YZ", "blue", "magenta")
         self.panel4 = self.create_panel("XZ", "blue", "yellow")
+        self.panel5 = self.create_panel("Plan", "white", "white")
+        self.panel6 = self.create_panel("Realtime", "white", "white")
 
         self.panel1.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self.panel2.grid(row=0, column=1, sticky="nsew", padx=1, pady=1)
         self.panel3.grid(row=1, column=0, sticky="nsew", padx=1, pady=1)
         self.panel4.grid(row=1, column=1, sticky="nsew", padx=1, pady=1)
+        self.panel5.grid(row=2, column=0, sticky="nsew", padx=1, pady=1)
+        self.panel6.grid(row=2, column=1, sticky="nsew", padx=1, pady=1)
 
         self.content_frame.grid_columnconfigure(0, weight=1, minsize=512)
         self.content_frame.grid_columnconfigure(1, weight=1, minsize=512)
         self.content_frame.grid_rowconfigure(0, weight=1, minsize=512)
         self.content_frame.grid_rowconfigure(1, weight=1, minsize=512)
+        self.content_frame.grid_rowconfigure(2, weight=1, minsize=512)
 
-        self.panels.extend([self.panel1, self.panel2, self.panel3, self.panel4])
+        self.panels.extend([self.panel1, self.panel2, self.panel3, self.panel4, self.panel5, self.panel6])
 
-        # Initial axes
         self.update_panel_images()
 
     def create_panel(self, label_text, x_color, y_color):
@@ -195,7 +200,6 @@ class MainPage:
         panel.pack_propagate(False)  # Prevent the panel from resizing to fit its contents
         panel.canvas = Canvas(panel, bg="black")
         panel.canvas.pack(fill="both", expand=True, anchor="center")
-        
         return panel
 
     def update_panel_images(self):
@@ -210,20 +214,13 @@ class MainPage:
             elif num == 3:
                 self.draw_axes_value_change(pa, "blue", "yellow", self.Y, self.Z_for_axis)
 
-    def draw_axes_center(self, panel, x_color, y_color):
-        panel.canvas.delete("axes")  # Clear previous axes
-        width = panel.canvas.winfo_width()
-        height = panel.canvas.winfo_height()
-        panel.canvas.create_line(0, height // 2, width, height // 2, fill=x_color, tags="axes")  # x-axis
-        panel.canvas.create_line(width // 2, 0, width // 2, height, fill=y_color, tags="axes")  # y-axis
-
     def draw_axes_value_change(self, panel, x_color, y_color, x_axis, y_axis):
-        panel.canvas.delete("axes")  # Clear previous axes
+        panel.canvas.delete("axes")
         width = panel.canvas.winfo_width()
         height = panel.canvas.winfo_height()
         width_ratio = 512 / width
         height_ratio = 512 / height
-        if y_axis == self.Z_for_axis:  # start the axis from the bottom
+        if y_axis == self.Z_for_axis:
             panel.canvas.create_line(0, (height - (y_axis / height_ratio)), width, (height - (y_axis / height_ratio)), fill=x_color, tags="axes")
             panel.canvas.create_line(x_axis / width_ratio, 0, x_axis / width_ratio, height, fill=y_color, tags="axes")
         else:
@@ -284,17 +281,16 @@ class MainPage:
                 image_2d = np.zeros((512, 512), dtype=np.int16)  # Placeholder for the 3D view
         except IndexError:
             image_2d = np.zeros((512, 512), dtype=np.int16)  # Set the panel to black screen in case of error
-
+        print(self.volume3d)
         self.update_panel_image(pa, image_2d)
         self.draw_needle_plan()
 
     def update_panel_image(self, panel, image_data):
         image = self.make_2d_image(image_data) if image_data is not None else None
         photo = ImageTk.PhotoImage(image=image) if image_data is not None else None
-        panel.canvas.delete("axes")  # Clear previous images and axes
+        panel.canvas.delete("axes")
         panel.canvas.delete("images")
 
-        # Center the image
         if photo:
             canvas_width = panel.canvas.winfo_width()
             canvas_height = panel.canvas.winfo_height()
@@ -304,7 +300,6 @@ class MainPage:
             y = (canvas_height - image_height) // 2
             panel.canvas.create_image(x, y, image=photo, anchor='nw')
             panel.canvas.image = photo
-        # Redraw axes with the correct colors
         if panel == self.panel2:
             self.draw_axes_value_change(panel, "magenta", "yellow", self.Y, self.X)
         elif panel == self.panel3:
@@ -337,7 +332,9 @@ class MainPage:
         self.Z = img_shape[2] // 2
         print("X,Y,Z: ", self.X_init, self.Y_init, self.Z_init)
 
-        self.visualize_vispy(self.volume3d)  # Use Vispy to visualize the image in panel1
+        self.visualize_vispy(self.volume3d)
+        print(self.volume3d)
+        # plot needle plan in self.volume3d
 
     def make_2d_image(self, image_2d):
         if image_2d.max() - image_2d.min() != 0:
@@ -359,8 +356,8 @@ class MainPage:
         self.zoom(0.9)
 
     def zoom(self, factor):
-        pass  # Implement zoom functionality
-        
+        pass
+
     def show_add_menu(self):
         menu2 = Menu(self.root, tearoff=0)
         menu2.add_command(label="New window")
@@ -403,33 +400,35 @@ class MainPage:
                 f = float(row[5])
                 S = math.sqrt(d * d + e * e + f * f)
 
-                vector = Vector3D(d / S, e / S, f / S)  # Normalized vector
+                vector = Vector3D(d / S, e / S, f / S)
                 needle_info = NeedleInfo(point, vector)
                 self.needleVector.append(needle_info)
                 print(needle_info.point.x, needle_info.point.y, needle_info.point.z)
                 print(needle_info.vector.x, needle_info.vector.y, needle_info.vector.z)
         
         self.draw_needle_plan()
-    
+        self._count = 0
+        self.timer = Timer(0.5, self.timer_update)
+        self.timer.start()
+        
     def draw_needle_plan(self):
         for needle in self.needleVector:
-            for panel, plane in zip([self.panel2, self.panel3, self.panel4], ["xy", "yz", "xz"]):
+            self.X = int(needle.vector.x * self.X_init)
+            self.Y = int(needle.vector.y * self.Y_init)
+            self.Z = int(needle.vector.z * self.Z_init)
+            
+            for panel, plane in zip([self.panel1, self.panel2, self.panel3, self.panel4], ["xy", "xy", "yz", "xz"]):
                 if plane == "xy":
-                    x0, y0 = needle.point.x, needle.point.y
-                    x1, y1 = x0 + needle.vector.x * 100, y0 + needle.vector.y * 100
+                    x, y = needle.point.x, needle.point.y
                 elif plane == "yz":
-                    x0, y0 = needle.point.y, needle.point.z
-                    x1, y1 = x0 + needle.vector.y * 100, y0 + needle.vector.z * 100
+                    x, y = needle.point.y, needle.point.z
                 elif plane == "xz":
-                    x0, y0 = needle.point.x, needle.point.z
-                    x1, y1 = x0 + needle.vector.x * 100, y0 + needle.vector.z * 100
+                    x, y = needle.point.x, needle.point.z
 
-                x0 = x0 * (panel.canvas.winfo_width() / 512)
-                y0 = y0 * (panel.canvas.winfo_height() / 512)
-                x1 = x1 * (panel.canvas.winfo_width() / 512)
-                y1 = y1 * (panel.canvas.winfo_height() / 512)
+                x = x * (panel.canvas.winfo_width() / 512)
+                y = y * (panel.canvas.winfo_height() / 512)
 
-                panel.canvas.create_line(x0, y0, x1, y1, fill="red", width=1, tags="needle")
+                panel.canvas.create_oval(x-2, y-2, x+2, y+2, fill="red", outline="red", tags="needle")
 
     def visualize_vispy(self, volume3d):
         self.canvas = scene.SceneCanvas(keys='interactive', show=True)
@@ -447,13 +446,12 @@ class MainPage:
         self.canvas.native.pack(side=TOP, fill=BOTH, expand=1)
         
     def update_dots_from_csv(self):
-        if self.file_path is None:
-            self.file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
-            if not self.file_path:
-                return
+        file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
+        if not file_path:
+            return
 
         points = []
-        with open(self.file_path, newline='') as csvfile:
+        with open(file_path, newline='') as csvfile:
             csv_reader = csv.reader(csvfile)
             for row in csv_reader:
                 x = float(row[0])
@@ -464,9 +462,73 @@ class MainPage:
         points = np.array(points)
         self.scatter.set_data(points, face_color=(1, 0, 0, 1), size=5)
 
-        # Update every second
-        self.timer = Timer(1, self.update_dots_from_csv)
+        self.timer = Timer(5, self.update_dots_from_csv)
         self.timer.start()
+
+    def timer_update(self):
+        if self._count >= len(self.needleVector) or self.IsSelectedItem == 0: 
+            return
+
+        nvector3D = self.needleVector[self._count]
+        point = nvector3D.point
+        vector = nvector3D.vector
+
+        P_angle = math.atan2(vector.z, vector.x)
+        R = self.make_y_rotation_matrix(-P_angle)
+
+        # Im = self.selectedItem.ImageData.copy()
+
+        P = Vector3D(
+            x=point.x - self.X_init,
+            y=point.y - self.Y_init,
+            z=point.z - self.Z_init
+        )
+
+        needle = self.calculation_matrix_3x1(R, P)
+        needle.x += 256
+        needle.y += 256
+        needle.z += 256
+
+        # self.make_3d_needle_array(Im, P_angle)
+        print(needle.x, needle.y, needle.z)
+        for pa in self.panels:
+            if pa == self.panel1:
+                image_2d = self.volume3d[:, :, int(abs(needle.z - 512) - 1)]
+                self.update_panel_image(pa, image_2d)
+                needle = self.needleVector[self._count]
+                x, y = needle.point.x, needle.point.y
+                x = x * (pa.canvas.winfo_width() / 512)
+                y = y * (pa.canvas.winfo_height() / 512)
+                pa.canvas.create_oval(x-2, y-2, x+2, y+2, fill="red", outline="red", tags="needle")
+
+                # image_2d = self.make_2d_array_xy(self.NeedleMatrix3D, int(abs(needle.z - 512) - 1))
+                # self.draw_axes_value_change(pa, "blue", "yellow", needle.x, needle.y)
+        
+        self._count += 1
+        self.timer = Timer(0.5, self.timer_update)
+        self.timer.start()
+
+    def make_y_rotation_matrix(self, angle):
+        cos_a = math.cos(angle)
+        sin_a = math.sin(angle)
+        return np.array([
+            [cos_a, 0, -sin_a],
+            [0, 1, 0],
+            [sin_a, 0, cos_a]
+        ])
+
+    def calculation_matrix_3x1(self, R, P):
+        P_matrix = np.array([P.x, P.y, P.z])
+        result = np.dot(R, P_matrix)
+        return Vector3D(result[0], result[1], result[2])
+
+    def make_3d_needle_array(self, Im, P_angle):
+        # Implement the method to populate NeedleMatrix3D with rotated data
+        pass
+
+    def make_2d_array_xy(self, matrix_3d, index):
+        # Implement the method to create a 2D array from the 3D needle matrix
+        pass
 
 if __name__ == '__main__':
     root = Tk()
