@@ -94,6 +94,9 @@ class MainPage:
 
         zoom_out_button = Button(self.toolbar, text="ZoomOut", command=self.zoom_out)
         zoom_out_button.pack(side="left")
+        
+        clear_button = Button(self.toolbar, text="Clear Needle", command=self.clear_needle_line)
+        clear_button.pack(side="left")
 
     def init_sidebar(self):
         self.sidebar = Frame(self.root)
@@ -236,7 +239,7 @@ class MainPage:
     def show_file_menu(self):
         menu = Menu(self.root, tearoff=0)
         menu.add_command(label="DICOM Folder", command=self.input_button_click)
-        menu.add_command(label="Coordinate Data Target", command=self.update_dots_from_csv)
+        menu.add_command(label="Coordinate Data Target")
         menu.add_command(label="Puncture Planned Coordinate Data", command=self.input_plan_coor_data)
         menu.add_command(label="Start Point End Point Data")
         menu.post(self.root.winfo_pointerx(), self.root.winfo_pointery())
@@ -281,9 +284,13 @@ class MainPage:
                 image_2d = np.zeros((512, 512), dtype=np.int16)  # Placeholder for the 3D view
         except IndexError:
             image_2d = np.zeros((512, 512), dtype=np.int16)  # Set the panel to black screen in case of error
-        print(self.volume3d)
+        # print(self.volume3d)
         self.update_panel_image(pa, image_2d)
-        self.draw_needle_plan()
+        try:
+            self.draw_needle_plan(self._count)
+        except AttributeError:
+            pass
+        
 
     def update_panel_image(self, panel, image_data):
         image = self.make_2d_image(image_data) if image_data is not None else None
@@ -389,47 +396,57 @@ class MainPage:
 
         with open(file_path, newline='') as csvfile:
             csv_reader = csv.reader(csvfile)
-            for row in csv_reader:
-                a = float(row[0])
-                b = float(row[1])
-                c = float(row[2])
-                point = Vector3D(a, b, c)
-
-                d = float(row[3])
-                e = float(row[4])
-                f = float(row[5])
-                S = math.sqrt(d * d + e * e + f * f)
-
-                vector = Vector3D(d / S, e / S, f / S)
-                needle_info = NeedleInfo(point, vector)
-                self.needleVector.append(needle_info)
-                print(needle_info.point.x, needle_info.point.y, needle_info.point.z)
-                print(needle_info.vector.x, needle_info.vector.y, needle_info.vector.z)
+            points = [list(map(float, row)) for row in csv_reader]
         
-        self.draw_needle_plan()
+        if len(points) < 2:
+            return
+
+        self.point_start = points[0]
+        self.point_end = points[1]
+        print(self.point_start, self.point_end)
+        
         self._count = 0
-        self.timer = Timer(0.5, self.timer_update)
-        self.timer.start()
+        self.timer_update()
         
-    def draw_needle_plan(self):
-        for needle in self.needleVector:
-            self.X = int(needle.vector.x * self.X_init)
-            self.Y = int(needle.vector.y * self.Y_init)
-            self.Z = int(needle.vector.z * self.Z_init)
-            
-            for panel, plane in zip([self.panel1, self.panel2, self.panel3, self.panel4], ["xy", "xy", "yz", "xz"]):
-                if plane == "xy":
-                    x, y = needle.point.x, needle.point.y
-                elif plane == "yz":
-                    x, y = needle.point.y, needle.point.z
-                elif plane == "xz":
-                    x, y = needle.point.x, needle.point.z
+    def draw_needle_plan(self, dash_number):
+        for panel, plane in zip([self.panel2, self.panel3, self.panel4], ["xy", "yz", "xz"]):
+            if plane == "xy":
+                x0, y0 = self.point_start[0], self.point_start[1]
+                x1, y1 = self.point_end[0], self.point_end[1]
+            x0 = x0 * (panel.canvas.winfo_width() / 512)
+            y0 = y0 * (panel.canvas.winfo_height() / 512)
+            x1 = x1 * (panel.canvas.winfo_width() / 512)
+            y1 = y1 * (panel.canvas.winfo_height() / 512)
+            self.create_dash_line(panel.canvas, x0, y0, x1, y1, fill="red", tags="needle", dash_number=dash_number)
 
-                x = x * (panel.canvas.winfo_width() / 512)
-                y = y * (panel.canvas.winfo_height() / 512)
+    def create_dash_line(self, canvas, x0, y0, x1, y1, fill, tags, dash_number):
+        dash_length = 5
+        gap_length = 3
+        line_width = 3  # Adjust the width of the line here
+        total_length = ((x1 - x0)**2 + (y1 - y0)**2) ** 0.5
+        num_dashes = int(total_length // (dash_length + gap_length))
+        if dash_number > num_dashes:
+            dash_number = num_dashes
+        for i in range(dash_number):
+            start_x = x0 + (x1 - x0) * (i * (dash_length + gap_length)) / total_length
+            start_y = y0 + (y1 - y0) * (i * (dash_length + gap_length)) / total_length
+            end_x = start_x + (x1 - x0) * dash_length / total_length
+            end_y = start_y + (y1 - y0) * dash_length / total_length
+            canvas.create_line(start_x, start_y, end_x, end_y, fill=fill, tags=tags, width=line_width)
 
-                panel.canvas.create_oval(x-2, y-2, x+2, y+2, fill="red", outline="red", tags="needle")
+    def timer_update(self):
+        self._count += 1
+        self.draw_needle_plan(self._count)
+        self.timer = Timer(1, self.timer_update)
+        self.timer.start()
+    
+    def clear_needle_line(self):
+        self.timer.cancel() # stop thread timer that draw the needle line (dash)
 
+        for panel in self.panels:
+            panel.canvas.delete("needle") # delete the needle line on every panels
+
+    
     def visualize_vispy(self, volume3d):
         self.canvas = scene.SceneCanvas(keys='interactive', show=True)
         self.view = self.canvas.central_widget.add_view()
@@ -445,90 +462,87 @@ class MainPage:
         self.canvas.native.master = self.panel1
         self.canvas.native.pack(side=TOP, fill=BOTH, expand=1)
         
-    def update_dots_from_csv(self):
-        file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
-        if not file_path:
-            return
+    # def update_dots_from_csv(self):
+    #     file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
+    #     if not file_path:
+    #         return
 
-        points = []
-        with open(file_path, newline='') as csvfile:
-            csv_reader = csv.reader(csvfile)
-            for row in csv_reader:
-                x = float(row[0])
-                y = float(row[1])
-                z = float(row[2])
-                points.append([x, y, z])
+    #     points = []
+    #     with open(file_path, newline='') as csvfile:
+    #         csv_reader = csv.reader(csvfile)
+    #         for row in csv_reader:
+    #             x = float(row[0])
+    #             y = float(row[1])
+    #             z = float(row[2])
+    #             points.append([x, y, z])
 
-        points = np.array(points)
-        self.scatter.set_data(points, face_color=(1, 0, 0, 1), size=5)
+    #     points = np.array(points)
+    #     self.scatter.set_data(points, face_color=(1, 0, 0, 1), size=5)
 
-        self.timer = Timer(5, self.update_dots_from_csv)
-        self.timer.start()
+    #     self.timer = Timer(5, self.update_dots_from_csv)
+    #     self.timer.start()
 
-    def timer_update(self):
-        if self._count >= len(self.needleVector) or self.IsSelectedItem == 0: 
-            return
+    # def timer_update(self):
+    #     if self._count >= len(self.needleVector) or self.IsSelectedItem == 0: 
+    #         return
 
-        nvector3D = self.needleVector[self._count]
-        point = nvector3D.point
-        vector = nvector3D.vector
+    #     nvector3D = self.needleVector[self._count]
+    #     point = nvector3D.point
+    #     vector = nvector3D.vector
 
-        P_angle = math.atan2(vector.z, vector.x)
-        R = self.make_y_rotation_matrix(-P_angle)
+    #     P_angle = math.atan2(vector.z, vector.x)
+    #     R = self.make_y_rotation_matrix(-P_angle)
 
-        # Im = self.selectedItem.ImageData.copy()
+    #     # Im = self.selectedItem.ImageData.copy()
 
-        P = Vector3D(
-            x=point.x - self.X_init,
-            y=point.y - self.Y_init,
-            z=point.z - self.Z_init
-        )
+    #     P = Vector3D(
+    #         x=point.x - self.X_init,
+    #         y=point.y - self.Y_init,
+    #         z=point.z - self.Z_init
+    #     )
 
-        needle = self.calculation_matrix_3x1(R, P)
-        needle.x += 256
-        needle.y += 256
-        needle.z += 256
+    #     needle = self.calculation_matrix_3x1(R, P)
+    #     needle.x += 256
+    #     needle.y += 256
+    #     needle.z += 256
 
-        # self.make_3d_needle_array(Im, P_angle)
-        print(needle.x, needle.y, needle.z)
-        for pa in self.panels:
-            if pa == self.panel1:
-                image_2d = self.volume3d[:, :, int(abs(needle.z - 512) - 1)]
-                self.update_panel_image(pa, image_2d)
-                needle = self.needleVector[self._count]
-                x, y = needle.point.x, needle.point.y
-                x = x * (pa.canvas.winfo_width() / 512)
-                y = y * (pa.canvas.winfo_height() / 512)
-                pa.canvas.create_oval(x-2, y-2, x+2, y+2, fill="red", outline="red", tags="needle")
+    #     # self.make_3d_needle_array(Im, P_angle)
+    #     print(needle.x, needle.y, needle.z)
+    #     for pa in self.panels:
+    #         if pa == self.panel1:
+    #             x, y = needle.point.x, needle.point.y
+    #             x = x * (pa.canvas.winfo_width() / 512)
+    #             y = y * (pa.canvas.winfo_height() / 512)
+    #             pa.canvas.create_oval(x-2, y-2, x+2, y+2, fill="red", outline="red", tags="needle")
 
-                # image_2d = self.make_2d_array_xy(self.NeedleMatrix3D, int(abs(needle.z - 512) - 1))
-                # self.draw_axes_value_change(pa, "blue", "yellow", needle.x, needle.y)
+    #             # image_2d = self.make_2d_array_xy(self.NeedleMatrix3D, int(abs(needle.z - 512) - 1))
+    #             # self.draw_axes_value_change(pa, "blue", "yellow", needle.x, needle.y)
         
-        self._count += 1
-        self.timer = Timer(0.5, self.timer_update)
-        self.timer.start()
+    #     self._count += 1
+    #     self.timer = Timer(0.5, self.timer_update)
+    #     self.timer.start()
 
-    def make_y_rotation_matrix(self, angle):
-        cos_a = math.cos(angle)
-        sin_a = math.sin(angle)
-        return np.array([
-            [cos_a, 0, -sin_a],
-            [0, 1, 0],
-            [sin_a, 0, cos_a]
-        ])
+    # def make_y_rotation_matrix(self, angle):
+    #     cos_a = math.cos(angle)
+    #     sin_a = math.sin(angle)
+    #     return np.array([
+    #         [cos_a, 0, -sin_a],
+    #         [0, 1, 0],
+    #         [sin_a, 0, cos_a]
+    #     ])
 
-    def calculation_matrix_3x1(self, R, P):
-        P_matrix = np.array([P.x, P.y, P.z])
-        result = np.dot(R, P_matrix)
-        return Vector3D(result[0], result[1], result[2])
+    # def calculation_matrix_3x1(self, R, P):
+    #     P_matrix = np.array([P.x, P.y, P.z])
+    #     result = np.dot(R, P_matrix)
+    #     return Vector3D(result[0], result[1], result[2])
 
-    def make_3d_needle_array(self, Im, P_angle):
-        # Implement the method to populate NeedleMatrix3D with rotated data
-        pass
+    # def make_3d_needle_array(self, Im, P_angle):
+    #     # Implement the method to populate NeedleMatrix3D with rotated data
+    #     pass
 
-    def make_2d_array_xy(self, matrix_3d, index):
-        # Implement the method to create a 2D array from the 3D needle matrix
-        pass
+    # def make_2d_array_xy(self, matrix_3d, index):
+    #     # Implement the method to create a 2D array from the 3D needle matrix
+    #     pass
 
 if __name__ == '__main__':
     root = Tk()
