@@ -111,12 +111,13 @@ class MainPage:
         sliders_frame = Frame(self.sidebar)
         sliders_frame.pack(fill="both", expand=True)
 
+        # First number is the maximum value for the slider, Second number is the initial value of the slider when the application starts
         self.add_slider(sliders_frame, "X Value", 512, 256, lambda value: self.slider_changed("X Value", value))
         self.add_slider(sliders_frame, "Y Value", 512, 256, lambda value: self.slider_changed("Y Value", value))
         self.add_slider(sliders_frame, "Z Value", 512, 256, lambda value: self.slider_changed("Z Value", value))
         self.add_slider(sliders_frame, "X Rotation", 180, 90, lambda value: self.slider_changed("X Rotation", value))
-        self.add_slider(sliders_frame, "Y Rotation", 180, 90, lambda value: self.slider_changed("Y Rotation", value))
-        self.add_slider(sliders_frame, "Z Rotation", 180, 90, lambda value: self.slider_changed("Z Rotation", value))
+        self.add_slider(sliders_frame, "Y Rotation", 360, 180, lambda value: self.slider_changed("Y Rotation", value))
+        self.add_slider(sliders_frame, "Z Rotation", 360, 180, lambda value: self.slider_changed("Z Rotation", value))
 
     def add_slider(self, parent, label_text, maximum, initial_value, command):
         label = Label(parent, text=label_text)
@@ -145,6 +146,12 @@ class MainPage:
                 self.Z = -int(int(value) - low_end)
                 if self.Z == 0:  # prevent img from being loop when self.Z == 0 because it the same number with
                     self.Z = -1
+        elif name == "X Rotation":
+            self.view.camera.elevation = float(value)
+        elif name == "Y Rotation":
+            self.view.camera.azimuth = float(value)
+        elif name == "Z Rotation":
+            self.view.camera.roll = float(value)
         self.update_images()
         print(f"Slider changed: {name} to {int(value)}")
 
@@ -268,6 +275,7 @@ class MainPage:
             return
         for num, pa in enumerate(self.panels):
             self.load_panel_image(pa, num)
+        self.visualize_vispy(self.volume3d)
 
     def load_panel_image(self, pa, num):
         if self.IsSelectedItem == 0:
@@ -337,9 +345,8 @@ class MainPage:
         self.Y = img_shape[1] // 2
         self.Z = img_shape[2] // 2
         print("X,Y,Z: ", self.X_init, self.Y_init, self.Z_init)
-
-        self.visualize_vispy(self.volume3d)
-        print(self.volume3d)
+        
+        # print(self.volume3d)
         # plot needle plan in self.volume3d
 
     def make_2d_image(self, image_2d):
@@ -450,11 +457,17 @@ class MainPage:
     def visualize_vispy(self, volume3d):
         self.canvas = scene.SceneCanvas(keys='interactive', show=True)
         self.view = self.canvas.central_widget.add_view()
-        
+
         self.volume = scene.visuals.Volume(volume3d, parent=self.view.scene, threshold=0.225)
         
-        self.view.camera = scene.cameras.TurntableCamera(parent=self.view.scene, fov=60)
-        self.view.camera.set_range()
+        # Initialize the TurntableCamera
+        self.view.camera = scene.cameras.TurntableCamera(parent=self.view.scene, fov=60, elevation=90, azimuth=90, roll=90)
+        
+        # Set the elevation range to enable unrestricted rotation from 0 to 180 degrees
+        self.view.camera.elevation_range = (0, 180)
+        
+        # Remove constraints on azimuth range to enable unrestricted rotation
+        self.view.camera.azimuth_range = (None, None)
         
         self.scatter = visuals.Markers()
         self.view.add(self.scatter)
@@ -462,7 +475,7 @@ class MainPage:
         self.dash_line = visuals.Line(color='red', width=3, method='gl', parent=self.view.scene)
 
         self.canvas.native.master = self.panel1
-        self.canvas.native.pack(side=TOP, fill=BOTH, expand=1)
+        self.canvas.native.pack(side='top', fill='both', expand=True)
         self.timer_update()
 
     def draw_needle_plan_vispy(self, dash_number):
