@@ -116,8 +116,8 @@ class MainPage:
         self.add_slider(sliders_frame, "Y Value", 512, 256, lambda value: self.slider_changed("Y Value", value))
         self.add_slider(sliders_frame, "Z Value", 512, 256, lambda value: self.slider_changed("Z Value", value))
         self.add_slider(sliders_frame, "X Rotation", 180, 90, lambda value: self.slider_changed("X Rotation", value))
-        self.add_slider(sliders_frame, "Y Rotation", 360, 180, lambda value: self.slider_changed("Y Rotation", value))
-        self.add_slider(sliders_frame, "Z Rotation", 360, 180, lambda value: self.slider_changed("Z Rotation", value))
+        self.add_slider(sliders_frame, "Y Rotation", 360, 90, lambda value: self.slider_changed("Y Rotation", value))
+        self.add_slider(sliders_frame, "Z Rotation", 360, 90, lambda value: self.slider_changed("Z Rotation", value))
 
     def add_slider(self, parent, label_text, maximum, initial_value, command):
         label = Label(parent, text=label_text)
@@ -178,6 +178,9 @@ class MainPage:
         self.canvas.create_window((0, 0), window=self.content_frame, anchor="nw")
 
         self.init_panels()
+        
+        # Initialize the view attribute here
+        self.view = scene.SceneCanvas(keys='interactive', show=False).central_widget.add_view()
 
     def init_panels(self):
         self.panel1 = self.create_panel("3D", "white", "white")
@@ -416,15 +419,18 @@ class MainPage:
         self.timer_update_3d()
         
     def draw_needle_plan(self, dash_number):
-        for panel, plane in zip([self.panel2, self.panel3, self.panel4], ["xy", "yz", "xz"]):
-            if plane == "xy":
-                x0, y0 = self.point_start[0], self.point_start[1]
-                x1, y1 = self.point_end[0], self.point_end[1]
-            x0 = x0 * (panel.canvas.winfo_width() / 512)
-            y0 = y0 * (panel.canvas.winfo_height() / 512)
-            x1 = x1 * (panel.canvas.winfo_width() / 512)
-            y1 = y1 * (panel.canvas.winfo_height() / 512)
-            self.create_dash_line(panel.canvas, x0, y0, x1, y1, fill="red", tags="needle", dash_number=dash_number)
+        try:
+            for panel, plane in zip([self.panel2, self.panel3, self.panel4], ["xy", "yz", "xz"]):
+                if plane == "xy":
+                    x0, y0 = self.point_start[0], self.point_start[1]
+                    x1, y1 = self.point_end[0], self.point_end[1]
+                x0 = x0 * (panel.canvas.winfo_width() / 512)
+                y0 = y0 * (panel.canvas.winfo_height() / 512)
+                x1 = x1 * (panel.canvas.winfo_width() / 512)
+                y1 = y1 * (panel.canvas.winfo_height() / 512)
+                self.create_dash_line(panel.canvas, x0, y0, x1, y1, fill="red", tags="needle", dash_number=dash_number)
+        except AttributeError:
+            pass
 
     def create_dash_line(self, canvas, x0, y0, x1, y1, fill, tags, dash_number):
         dash_length = 5
@@ -474,8 +480,6 @@ class MainPage:
         
         self.dash_line = visuals.Line(color='red', width=3, method='gl', parent=self.view.scene)
 
-        self.canvas.native.master = self.panel1
-        self.canvas.native.pack(side='top', fill='both', expand=True)
         self.timer_update()
 
     def draw_needle_plan_vispy(self, dash_number):
