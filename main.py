@@ -420,7 +420,7 @@ class MainPage:
         
     def draw_needle_plan(self, dash_number):
         try:
-            for panel, plane in zip([self.panel2, self.panel3, self.panel4], ["xy", "yz", "xz"]):
+            for panel, plane in zip([self.panel2], ["xy"]):
                 if plane == "xy":
                     x0, y0 = self.point_start[0], self.point_start[1]
                     x1, y1 = self.point_end[0], self.point_end[1]
@@ -463,11 +463,11 @@ class MainPage:
     def visualize_vispy(self, volume3d):
         self.canvas = scene.SceneCanvas(keys='interactive', show=True)
         self.view = self.canvas.central_widget.add_view()
-
+        
         self.volume = scene.visuals.Volume(volume3d, parent=self.view.scene, threshold=0.225)
         
         # Initialize the TurntableCamera
-        self.view.camera = scene.cameras.TurntableCamera(parent=self.view.scene, fov=60, elevation=90, azimuth=90, roll=90)
+        self.view.camera = scene.cameras.TurntableCamera(parent=self.view.scene, fov=60, elevation=90, azimuth=270, roll=90)
         
         # Set the elevation range to enable unrestricted rotation from 0 to 180 degrees
         self.view.camera.elevation_range = (0, 180)
@@ -480,29 +480,32 @@ class MainPage:
         
         self.dash_line = visuals.Line(color='red', width=3, method='gl', parent=self.view.scene)
 
-        self.timer_update()
+        self.timer_update_3d()
 
     def draw_needle_plan_vispy(self, dash_number):
-        x0, y0, z0 = self.point_start
-        x1, y1, z1 = self.point_end
-        dash_length = 5
-        gap_length = 3
-        total_length = ((x1 - x0)**2 + (y1 - y0)**2 + (z1 - z0)**2) ** 0.5
-        num_dashes = int(total_length // (dash_length + gap_length))
-        if dash_number > num_dashes:
-            dash_number = num_dashes
-        
-        points = []
-        for i in range(dash_number):
-            start_x = x0 + (x1 - x0) * (i * (dash_length + gap_length)) / total_length
-            start_y = y0 + (y1 - y0) * (i * (dash_length + gap_length)) / total_length
-            start_z = z0 + (z1 - z0) * (i * (dash_length + gap_length)) / total_length
-            end_x = start_x + (x1 - x0) * dash_length / total_length
-            end_y = start_y + (y1 - y0) * dash_length / total_length
-            end_z = start_z + (z1 - z0) * dash_length / total_length
-            points.extend([[start_x, start_y, start_z], [end_x, end_y, end_z]])
-        
-        self.dash_line.set_data(np.array(points))
+        try:
+            x0, y0, z0 = self.point_start
+            x1, y1, z1 = self.point_end
+            dash_length = 5
+            gap_length = 3
+            total_length = ((x1 - x0)**2 + (y1 - y0)**2 + (z1 - z0)**2) ** 0.5
+            num_dashes = int(total_length // (dash_length + gap_length))
+            if dash_number > num_dashes:
+                dash_number = num_dashes
+
+            points = []
+            for i in range(dash_number):
+                start_x = x0 + (x1 - x0) * (i * (dash_length + gap_length)) / total_length
+                start_y = y0 + (y1 - y0) * (i * (dash_length + gap_length)) / total_length
+                start_z = z0 + (z1 - z0) * (i * (dash_length + gap_length)) / total_length
+                end_x = start_x + (x1 - x0) * dash_length / total_length
+                end_y = start_y + (y1 - y0) * dash_length / total_length
+                end_z = start_z + (z1 - z0) * dash_length / total_length
+                points.extend([[start_x, start_y, start_z], [end_x, end_y, end_z]])
+
+            self.dash_line.set_data(np.array(points), connect='segments')
+        except AttributeError:
+            pass
 
     def timer_update_3d(self):
         self._count += 1
