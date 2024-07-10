@@ -11,7 +11,8 @@ import shutil
 from vispy import app, scene
 from vispy.scene import visuals
 from vispy.visuals.transforms import STTransform
-from threading import Timer
+import threading
+import time
 
 class Vector3D:
     def __init__(self, x, y, z):
@@ -61,12 +62,21 @@ class MainPage:
         self.timer = None
         self.selectedItem = None
 
+        self.is_clear = False
+        
         self.init_toolbar()
         self.init_sidebar()
         self.init_main_view()
 
         self.dataList = []
+        
+        self.csv_file_path = None  # Path to your CSV file
+        self.previous_data_length = 0
+        self.realtime_points = []
 
+        self.check_csv_thread = None
+        self.stop_thread = False
+        
     def init_toolbar(self):
         self.toolbar = Frame(self.root)
         self.toolbar.pack(side="top", fill="x")
@@ -80,23 +90,14 @@ class MainPage:
         load_button = Button(self.toolbar, text="Load", command=self.btnLoadPictures_Click)
         load_button.pack(side="left")
 
-        add_button = Button(self.toolbar, text="Add", command=self.show_add_menu)
-        add_button.pack(side="left")
-
-        delete_button = Button(self.toolbar, text="Delete")
-        delete_button.pack(side="left")
-
-        exchange_button = Button(self.toolbar, text="Exchange")
-        exchange_button.pack(side="left")
-
-        zoom_in_button = Button(self.toolbar, text="ZoomIn", command=self.zoom_in)
-        zoom_in_button.pack(side="left")
-
-        zoom_out_button = Button(self.toolbar, text="ZoomOut", command=self.zoom_out)
-        zoom_out_button.pack(side="left")
+        clear_needle_button = Button(self.toolbar, text="Clear Plan", command=self.clear_plan_line)
+        clear_needle_button.pack(side="left")
         
-        clear_button = Button(self.toolbar, text="Clear Needle", command=self.clear_needle_line)
-        clear_button.pack(side="left")
+        start_button = Button(self.toolbar, text="Start Real Time", command=self.start_realtime_data)
+        start_button.pack(side="left")
+        
+        stop_button = Button(self.toolbar, text="Stop Real Time", command=self.stop_realtime_data)
+        stop_button.pack(side="left")
 
     def init_sidebar(self):
         self.sidebar = Frame(self.root)
@@ -112,7 +113,6 @@ class MainPage:
         sliders_frame = Frame(self.sidebar)
         sliders_frame.pack(fill="both", expand=True)
 
-        # First number is the maximum value for the slider, Second number is the initial value of the slider when the application starts
         self.add_slider(sliders_frame, "X Value", 512, 256, lambda value: self.slider_changed("X Value", value))
         self.add_slider(sliders_frame, "Y Value", 512, 256, lambda value: self.slider_changed("Y Value", value))
         self.add_slider(sliders_frame, "Z Value", 512, 256, lambda value: self.slider_changed("Z Value", value))
@@ -137,15 +137,14 @@ class MainPage:
             self.Z_for_axis = int(value)
             low_end = 256 - (self.Z_init // 2)
             upper_end = 256 + (self.Z_init // 2)
-            upper_end_ratio = upper_end / self.Z_init
             self.Z = int(value)
-            if self.Z < low_end:  # set screen to black with z-value lower than low end of the image
+            if self.Z < low_end:
                 self.Z = 1234
-            elif self.Z > upper_end:  # set screen to black with z-value higher than upper end of the image
+            elif self.Z > upper_end:
                 self.Z = 1234
             else:
                 self.Z = -int(int(value) - low_end)
-                if self.Z == 0:  # prevent img from being loop when self.Z == 0 because it the same number with
+                if self.Z == 0:
                     self.Z = -1
         elif name == "X Rotation":
             self.view.camera.elevation = float(value)
@@ -180,7 +179,6 @@ class MainPage:
 
         self.init_panels()
         
-        # Initialize the view attribute here
         self.view = scene.SceneCanvas(keys='interactive', show=False).central_widget.add_view()
 
     def init_panels(self):
@@ -210,7 +208,7 @@ class MainPage:
 
     def create_panel(self, label_text, x_color, y_color):
         panel = Frame(self.content_frame, bg="black", width=512, height=512)
-        panel.pack_propagate(False)  # Prevent the panel from resizing to fit its contents
+        panel.pack_propagate(False)
         panel.canvas = Canvas(panel, bg="black")
         panel.canvas.pack(fill="both", expand=True, anchor="center")
         return panel
@@ -251,8 +249,15 @@ class MainPage:
         menu.add_command(label="DICOM Folder", command=self.input_button_click)
         menu.add_command(label="Coordinate Data Target")
         menu.add_command(label="Puncture Planned Coordinate Data", command=self.input_plan_coor_data)
+        menu.add_command(label="Select Real Time CSV", command=self.select_realtime_csv)
         menu.add_command(label="Start Point End Point Data")
         menu.post(self.root.winfo_pointerx(), self.root.winfo_pointery())
+
+    def select_realtime_csv(self):
+        file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
+        if file_path:
+            self.csv_file_path = file_path
+            print(f"Selected CSV file: {self.csv_file_path}")
 
     def input_button_click(self):
         folder = filedialog.askdirectory(title="Select a Folder")
@@ -285,23 +290,22 @@ class MainPage:
         if self.IsSelectedItem == 0:
             return
         try:
-            if num == 1:  # Axial view XY
+            if num == 1:
                 image_2d = self.volume3d[:, :, self.Z]
-            elif num == 2:  # Sagittal view YZ
+            elif num == 2:
                 image_2d = np.flipud(np.rot90(self.volume3d[:, self.Y, :]))
-            elif num == 3:  # Coronal view XZ
+            elif num == 3:
                 image_2d = np.flipud(np.rot90(self.volume3d[self.X, :, :]))
             else:
-                image_2d = np.zeros((512, 512), dtype=np.int16)  # Placeholder for the 3D view
+                image_2d = np.zeros((512, 512), dtype=np.int16)
         except IndexError:
-            image_2d = np.zeros((512, 512), dtype=np.int16)  # Set the panel to black screen in case of error
-        # print(self.volume3d)
+            image_2d = np.zeros((512, 512), dtype=np.int16)
         self.update_panel_image(pa, image_2d)
         try:
-            self.draw_needle_plan(self._count)
+            if not self.is_clear:
+                self.draw_needle_plan()
         except AttributeError:
             pass
-        
 
     def update_panel_image(self, panel, image_data):
         image = self.make_2d_image(image_data) if image_data is not None else None
@@ -349,9 +353,6 @@ class MainPage:
         self.Y = img_shape[1] // 2
         self.Z = img_shape[2] // 2
         print("X,Y,Z: ", self.X_init, self.Y_init, self.Z_init)
-        
-        # print(self.volume3d)
-        # plot needle plan in self.volume3d
 
     def make_2d_image(self, image_2d):
         if image_2d.max() - image_2d.min() != 0:
@@ -400,6 +401,7 @@ class MainPage:
         pass
     
     def input_plan_coor_data(self):
+        self.is_clear = False
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if not file_path:
             return
@@ -415,11 +417,10 @@ class MainPage:
         self.point_end = points[1]
         print(self.point_start, self.point_end)
         
-        self._count = 0
-        self.timer_update()
-        self.timer_update_3d()
-        
-    def draw_needle_plan(self, dash_number):
+        self.draw_needle_plan()
+        self.draw_needle_plan_vispy()
+
+    def draw_needle_plan(self):
         try:
             for panel, plane in zip([self.panel2], ["xy"]):
                 if plane == "xy":
@@ -429,38 +430,30 @@ class MainPage:
                 y0 = y0 * (panel.canvas.winfo_height() / 512)
                 x1 = x1 * (panel.canvas.winfo_width() / 512)
                 y1 = y1 * (panel.canvas.winfo_height() / 512)
-                self.create_dash_line(panel.canvas, x0, y0, x1, y1, fill="red", tags="needle", dash_number=dash_number)
+                self.create_dash_line(panel.canvas, x0, y0, x1, y1, fill="green", tags="needle")
         except AttributeError:
             pass
 
-    def create_dash_line(self, canvas, x0, y0, x1, y1, fill, tags, dash_number):
+    def create_dash_line(self, canvas, x0, y0, x1, y1, fill, tags):
         dash_length = 5
         gap_length = 3
-        line_width = 3  # Adjust the width of the line here
+        line_width = 3
         total_length = ((x1 - x0)**2 + (y1 - y0)**2) ** 0.5
         num_dashes = int(total_length // (dash_length + gap_length))
-        if dash_number > num_dashes:
-            dash_number = num_dashes
-        for i in range(dash_number):
+        for i in range(num_dashes):
             start_x = x0 + (x1 - x0) * (i * (dash_length + gap_length)) / total_length
             start_y = y0 + (y1 - y0) * (i * (dash_length + gap_length)) / total_length
             end_x = start_x + (x1 - x0) * dash_length / total_length
             end_y = start_y + (y1 - y0) * dash_length / total_length
             canvas.create_line(start_x, start_y, end_x, end_y, fill=fill, tags=tags, width=line_width)
-
-    def timer_update(self):
-        self._count += 1
-        self.draw_needle_plan(self._count)
-        self.timer = Timer(1, self.timer_update)
-        self.timer.start()
     
-    def clear_needle_line(self):
-        self.timer.cancel() # stop thread timer that draw the needle line (dash)
-
+    def clear_plan_line(self):
+        self.is_clear = True
         for panel in self.panels:
-            panel.canvas.delete("needle") # delete the needle line on every panels
+            panel.canvas.delete("needle")
+        if hasattr(self, 'dash_line'):
+            self.dash_line.set_data(np.array([]))
 
-    
     def visualize_vispy(self, volume3d):
         self.canvas = scene.SceneCanvas(keys='interactive', show=True)
         self.view = self.canvas.central_widget.add_view()
@@ -468,16 +461,11 @@ class MainPage:
         test = np.flipud(np.rollaxis(volume3d, 2))
         self.volume = scene.visuals.Volume(test, parent=self.view.scene, threshold=0.225)
 
-        # Initialize the TurntableCamera
         self.view.camera = scene.cameras.TurntableCamera(parent=self.view.scene, fov=60, elevation=90, azimuth=270, roll=90)
         
-        # Set the elevation range to enable unrestricted rotation from 0 to 180 degrees
         self.view.camera.elevation_range = (0, 180)
-        
-        # Remove constraints on azimuth range to enable unrestricted rotation
         self.view.camera.azimuth_range = (None, None)
 
-        # Create an XYZAxis visual
         axis = scene.visuals.XYZAxis(parent=self.view.scene)
         s = STTransform(translate=(50, 50, 0), scale=(50, 50, 50))
         axis.transform = s
@@ -485,11 +473,11 @@ class MainPage:
         self.scatter = visuals.Markers()
         self.view.add(self.scatter)
         
-        self.dash_line = visuals.Line(color='red', width=3, method='gl', parent=self.view.scene)
+        self.dash_line = visuals.Line(color='green', width=3, method='gl', parent=self.view.scene)
+        
+        self.draw_needle_plan_vispy()
 
-        self.timer_update_3d()
-
-    def draw_needle_plan_vispy(self, dash_number):
+    def draw_needle_plan_vispy(self):
         try:
             x0, y0, z0 = self.point_start
             x1, y1, z1 = self.point_end
@@ -497,11 +485,9 @@ class MainPage:
             gap_length = 3
             total_length = ((x1 - x0)**2 + (y1 - y0)**2 + (z1 - z0)**2) ** 0.5
             num_dashes = int(total_length // (dash_length + gap_length))
-            if dash_number > num_dashes:
-                dash_number = num_dashes
 
             points = []
-            for i in range(dash_number):
+            for i in range(num_dashes):
                 start_x = x0 + (x1 - x0) * (i * (dash_length + gap_length)) / total_length
                 start_y = y0 + (y1 - y0) * (i * (dash_length + gap_length)) / total_length
                 start_z = z0 + (z1 - z0) * (i * (dash_length + gap_length)) / total_length
@@ -513,13 +499,59 @@ class MainPage:
             self.dash_line.set_data(np.array(points), connect='segments')
         except AttributeError:
             pass
+        
+    def start_realtime_data(self):
+        if self.csv_file_path is None:
+            print("Please select a CSV file first.")
+            return
 
-    def timer_update_3d(self):
-        self._count += 1
-        self.draw_needle_plan_vispy(self._count)
-        self.timer = Timer(1, self.timer_update_3d)
-        self.timer.start()
+        if self.check_csv_thread is None:
+            self.stop_thread = False
+            self.check_csv_thread = threading.Thread(target=self.check_csv_for_updates)
+            self.check_csv_thread.daemon = True
+            self.check_csv_thread.start()
+            print("Started real-time data acquisition")
 
+    def stop_realtime_data(self):
+        self.stop_thread = True
+        self.check_csv_thread = None
+        print("Stopped real-time data acquisition")
+
+    def check_csv_for_updates(self):
+        while not self.stop_thread:
+            with open(self.csv_file_path, 'r') as file:
+                reader = csv.reader(file)
+                data = list(reader)
+
+            if len(data) > self.previous_data_length:
+                new_rows = data[self.previous_data_length:]
+                self.previous_data_length = len(data)
+
+                for row in new_rows:
+                    x, y, z = map(float, row)
+                    self.realtime_points.append([x, y, z])
+                    print(self.realtime_points)
+                    self.draw_realtime_line()
+
+            time.sleep(1)  # Check for new data every second
+
+    def draw_realtime_line(self):
+        # Draw on XY-plane
+        self.panel2.canvas.delete("realtime")
+        for i in range(1, len(self.realtime_points)):
+            x0, y0 = self.realtime_points[i-1][:2]
+            x1, y1 = self.realtime_points[i][:2]
+            self.create_dash_line(self.panel2.canvas, x0, y0, x1, y1, fill="red", tags="realtime")
+
+        # Draw on 3D visualization
+        self.update_realtime_line_vispy()
+
+    def update_realtime_line_vispy(self):
+        if not hasattr(self, 'realtime_line_vispy'):
+            self.realtime_line_vispy = visuals.Line(color='red', width=2, method='gl', parent=self.view.scene)
+
+        self.realtime_line_vispy.set_data(np.array(self.realtime_points), connect='strip')
+        
 if __name__ == '__main__':
     root = Tk()
     app = MainPage(root)
