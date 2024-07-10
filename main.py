@@ -63,6 +63,8 @@ class MainPage:
         self.selectedItem = None
 
         self.is_clear = False
+        self.plan_line_deleted = False
+        self.realtime_line_deleted = False
         
         self.init_toolbar()
         self.init_sidebar()
@@ -90,7 +92,7 @@ class MainPage:
         load_button = Button(self.toolbar, text="Load", command=self.btnLoadPictures_Click)
         load_button.pack(side="left")
 
-        clear_needle_button = Button(self.toolbar, text="Clear Plan", command=self.clear_plan_line)
+        clear_needle_button = Button(self.toolbar, text="Clear Plan", command=self.clear_needle)
         clear_needle_button.pack(side="left")
         
         start_button = Button(self.toolbar, text="Start Real Time", command=self.start_realtime_data)
@@ -98,6 +100,12 @@ class MainPage:
         
         stop_button = Button(self.toolbar, text="Stop Real Time", command=self.stop_realtime_data)
         stop_button.pack(side="left")
+        
+        delete_plan_button = Button(self.toolbar, text="Delete Plan Line", command=self.delete_plan_line)
+        delete_plan_button.pack(side="left")
+        
+        delete_realtime_button = Button(self.toolbar, text="Delete Real-Time Line", command=self.delete_realtime_line)
+        delete_realtime_button.pack(side="left")
 
     def init_sidebar(self):
         self.sidebar = Frame(self.root)
@@ -153,6 +161,8 @@ class MainPage:
         elif name == "Z Rotation":
             self.view.camera.roll = float(value)
         self.update_images()
+        self.draw_realtime_line()  # Redraw the real-time line on the XY-plane
+        self.update_realtime_line_vispy()  # Redraw the real-time line in 3D
         print(f"Slider changed: {name} to {int(value)}")
 
     def init_main_view(self):
@@ -257,6 +267,7 @@ class MainPage:
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if file_path:
             self.csv_file_path = file_path
+            self.realtime_line_deleted = False
             print(f"Selected CSV file: {self.csv_file_path}")
 
     def input_button_click(self):
@@ -401,11 +412,11 @@ class MainPage:
         pass
     
     def input_plan_coor_data(self):
-        self.is_clear = False
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if not file_path:
             return
-
+        self.is_clear = False
+        self.plan_line_deleted = False
         with open(file_path, newline='') as csvfile:
             csv_reader = csv.reader(csvfile)
             points = [list(map(float, row)) for row in csv_reader]
@@ -421,6 +432,8 @@ class MainPage:
         self.draw_needle_plan_vispy()
 
     def draw_needle_plan(self):
+        if self.plan_line_deleted:
+            return
         try:
             for panel, plane in zip([self.panel2], ["xy"]):
                 if plane == "xy":
@@ -447,10 +460,13 @@ class MainPage:
             end_y = start_y + (y1 - y0) * dash_length / total_length
             canvas.create_line(start_x, start_y, end_x, end_y, fill=fill, tags=tags, width=line_width)
     
-    def clear_plan_line(self):
+    def clear_needle(self):
         self.is_clear = True
+        self.plan_line_deleted = True
+        self.realtime_line_deleted = True
         for panel in self.panels:
             panel.canvas.delete("needle")
+            panel.canvas.delete("realtime")
         if hasattr(self, 'dash_line'):
             self.dash_line.set_data(np.array([]))
 
@@ -458,8 +474,8 @@ class MainPage:
         self.canvas = scene.SceneCanvas(keys='interactive', show=True)
         self.view = self.canvas.central_widget.add_view()
 
-        test = np.flipud(np.rollaxis(volume3d, 2))
-        self.volume = scene.visuals.Volume(test, parent=self.view.scene, threshold=0.225)
+        new_volumn3d = np.flipud(np.rollaxis(volume3d, 2))
+        self.volume = scene.visuals.Volume(new_volumn3d, parent=self.view.scene, threshold=0.225)
 
         self.view.camera = scene.cameras.TurntableCamera(parent=self.view.scene, fov=60, elevation=90, azimuth=270, roll=90)
         
@@ -474,10 +490,14 @@ class MainPage:
         self.view.add(self.scatter)
         
         self.dash_line = visuals.Line(color='green', width=3, method='gl', parent=self.view.scene)
+        self.realtime_line_vispy = visuals.Line(color='red', width=2, method='gl', parent=self.view.scene)  # Initialize the real-time line visual
+        self.view.add(self.realtime_line_vispy)  # Ensure the real-time line visual is added to the view
         
         self.draw_needle_plan_vispy()
 
     def draw_needle_plan_vispy(self):
+        if self.plan_line_deleted:
+            return
         try:
             x0, y0, z0 = self.point_start
             x1, y1, z1 = self.point_end
@@ -536,6 +556,8 @@ class MainPage:
             time.sleep(1)  # Check for new data every second
 
     def draw_realtime_line(self):
+        if self.realtime_line_deleted:
+            return
         # Draw on XY-plane
         self.panel2.canvas.delete("realtime")
         for i in range(1, len(self.realtime_points)):
@@ -547,11 +569,28 @@ class MainPage:
         self.update_realtime_line_vispy()
 
     def update_realtime_line_vispy(self):
+        if self.realtime_line_deleted:
+            return
         if not hasattr(self, 'realtime_line_vispy'):
             self.realtime_line_vispy = visuals.Line(color='red', width=2, method='gl', parent=self.view.scene)
 
-        self.realtime_line_vispy.set_data(np.array(self.realtime_points), connect='strip')
-        
+        # Ensure the real-time points are converted correctly for the 3D plot
+        if self.realtime_points:
+            points = np.array(self.realtime_points)
+            self.realtime_line_vispy.set_data(points, connect='strip')
+    
+    def delete_plan_line(self):
+        self.plan_line_deleted = True
+        self.panel2.canvas.delete("needle")
+        if hasattr(self, 'dash_line'):
+            self.dash_line.set_data(np.array([]))
+
+    def delete_realtime_line(self):
+        self.realtime_line_deleted = True
+        self.panel2.canvas.delete("realtime")
+        if hasattr(self, 'realtime_line_vispy'):
+            self.realtime_line_vispy.set_data(np.array([]))
+
 if __name__ == '__main__':
     root = Tk()
     app = MainPage(root)
