@@ -10,6 +10,7 @@ from PIL import Image, ImageTk
 import shutil
 from vispy import app, scene
 from vispy.scene import visuals
+from vispy.visuals.transforms import STTransform
 from threading import Timer
 
 class Vector3D:
@@ -463,9 +464,10 @@ class MainPage:
     def visualize_vispy(self, volume3d):
         self.canvas = scene.SceneCanvas(keys='interactive', show=True)
         self.view = self.canvas.central_widget.add_view()
-        
-        self.volume = scene.visuals.Volume(volume3d, parent=self.view.scene, threshold=0.225)
-        
+
+        test = np.flipud(np.rollaxis(volume3d, 2))
+        self.volume = scene.visuals.Volume(test, parent=self.view.scene, threshold=0.225)
+
         # Initialize the TurntableCamera
         self.view.camera = scene.cameras.TurntableCamera(parent=self.view.scene, fov=60, elevation=90, azimuth=270, roll=90)
         
@@ -474,7 +476,12 @@ class MainPage:
         
         # Remove constraints on azimuth range to enable unrestricted rotation
         self.view.camera.azimuth_range = (None, None)
-        
+
+        # Create an XYZAxis visual
+        axis = scene.visuals.XYZAxis(parent=self.view.scene)
+        s = STTransform(translate=(50, 50, 0), scale=(50, 50, 50))
+        axis.transform = s
+
         self.scatter = visuals.Markers()
         self.view.add(self.scatter)
         
