@@ -100,12 +100,6 @@ class MainPage:
         
         stop_button = Button(self.toolbar, text="Stop Real Time", command=self.stop_realtime_data)
         stop_button.pack(side="left")
-        
-        delete_plan_button = Button(self.toolbar, text="Delete Plan Line", command=self.delete_plan_line)
-        delete_plan_button.pack(side="left")
-        
-        delete_realtime_button = Button(self.toolbar, text="Delete Real-Time Line", command=self.delete_realtime_line)
-        delete_realtime_button.pack(side="left")
 
     def init_sidebar(self):
         self.sidebar = Frame(self.root)
