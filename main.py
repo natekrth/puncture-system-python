@@ -92,9 +92,6 @@ class MainPage:
         load_button = Button(self.toolbar, text="Load", command=self.btnLoadPictures_Click)
         load_button.pack(side="left")
 
-        clear_needle_button = Button(self.toolbar, text="Clear Plan", command=self.clear_needle)
-        clear_needle_button.pack(side="left")
-        
         start_button = Button(self.toolbar, text="Start Real Time", command=self.start_realtime_data)
         start_button.pack(side="left")
         
@@ -251,10 +248,8 @@ class MainPage:
     def show_file_menu(self):
         menu = Menu(self.root, tearoff=0)
         menu.add_command(label="DICOM Folder", command=self.input_button_click)
-        menu.add_command(label="Coordinate Data Target")
         menu.add_command(label="Puncture Planned Coordinate Data", command=self.input_plan_coor_data)
         menu.add_command(label="Select Real Time CSV", command=self.select_realtime_csv)
-        menu.add_command(label="Start Point End Point Data")
         menu.post(self.root.winfo_pointerx(), self.root.winfo_pointery())
 
     def select_realtime_csv(self):
