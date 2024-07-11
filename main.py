@@ -187,23 +187,18 @@ class MainPage:
         self.panel2 = self.create_panel("XY", "magenta", "yellow")
         self.panel3 = self.create_panel("YZ", "blue", "magenta")
         self.panel4 = self.create_panel("XZ", "blue", "yellow")
-        self.panel5 = self.create_panel("Plan", "white", "white")
-        self.panel6 = self.create_panel("Realtime", "white", "white")
 
         self.panel1.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
         self.panel2.grid(row=0, column=1, sticky="nsew", padx=1, pady=1)
         self.panel3.grid(row=1, column=0, sticky="nsew", padx=1, pady=1)
         self.panel4.grid(row=1, column=1, sticky="nsew", padx=1, pady=1)
-        self.panel5.grid(row=2, column=0, sticky="nsew", padx=1, pady=1)
-        self.panel6.grid(row=2, column=1, sticky="nsew", padx=1, pady=1)
 
         self.content_frame.grid_columnconfigure(0, weight=1, minsize=512)
         self.content_frame.grid_columnconfigure(1, weight=1, minsize=512)
         self.content_frame.grid_rowconfigure(0, weight=1, minsize=512)
         self.content_frame.grid_rowconfigure(1, weight=1, minsize=512)
-        self.content_frame.grid_rowconfigure(2, weight=1, minsize=512)
 
-        self.panels.extend([self.panel1, self.panel2, self.panel3, self.panel4, self.panel5, self.panel6])
+        self.panels.extend([self.panel1, self.panel2, self.panel3, self.panel4])
 
         self.update_panel_images()
 
