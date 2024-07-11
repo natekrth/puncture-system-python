@@ -92,10 +92,10 @@ class MainPage:
         load_button = Button(self.toolbar, text="Load", command=self.btnLoadPictures_Click)
         load_button.pack(side="left")
 
-        start_button = Button(self.toolbar, text="Start Real Time", command=self.start_realtime_data)
+        start_button = Button(self.toolbar, text="Start Real-Time Route", command=self.start_realtime_data)
         start_button.pack(side="left")
         
-        stop_button = Button(self.toolbar, text="Stop Real Time", command=self.stop_realtime_data)
+        stop_button = Button(self.toolbar, text="Stop Real-Time Route", command=self.stop_realtime_data)
         stop_button.pack(side="left")
 
     def init_sidebar(self):
@@ -183,22 +183,20 @@ class MainPage:
         self.view = scene.SceneCanvas(keys='interactive', show=False).central_widget.add_view()
 
     def init_panels(self):
-        self.panel1 = self.create_panel("3D", "white", "white")
         self.panel2 = self.create_panel("XY", "magenta", "yellow")
         self.panel3 = self.create_panel("YZ", "blue", "magenta")
         self.panel4 = self.create_panel("XZ", "blue", "yellow")
 
-        self.panel1.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
-        self.panel2.grid(row=0, column=1, sticky="nsew", padx=1, pady=1)
-        self.panel3.grid(row=1, column=0, sticky="nsew", padx=1, pady=1)
-        self.panel4.grid(row=1, column=1, sticky="nsew", padx=1, pady=1)
+        self.panel2.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        self.panel3.grid(row=0, column=1, sticky="nsew", padx=1, pady=1)
+        self.panel4.grid(row=1, column=0, sticky="nsew", padx=1, pady=1)
 
         self.content_frame.grid_columnconfigure(0, weight=1, minsize=512)
         self.content_frame.grid_columnconfigure(1, weight=1, minsize=512)
         self.content_frame.grid_rowconfigure(0, weight=1, minsize=512)
         self.content_frame.grid_rowconfigure(1, weight=1, minsize=512)
 
-        self.panels.extend([self.panel1, self.panel2, self.panel3, self.panel4])
+        self.panels.extend([self.panel2, self.panel3, self.panel4])
 
         self.update_panel_images()
 
@@ -214,11 +212,11 @@ class MainPage:
             size = min(pa.winfo_width(), pa.winfo_height())
             pa.config(width=size, height=size)
             self.load_panel_image(pa, num)
-            if num == 1:
+            if num == 0:
                 self.draw_axes_value_change(pa, "magenta", "yellow", self.Y, self.X)
-            elif num == 2:
+            elif num == 1:
                 self.draw_axes_value_change(pa, "blue", "magenta", self.X, self.Z_for_axis)
-            elif num == 3:
+            elif num == 2:
                 self.draw_axes_value_change(pa, "blue", "yellow", self.Y, self.Z_for_axis)
 
     def draw_axes_value_change(self, panel, x_color, y_color, x_axis, y_axis):
@@ -243,8 +241,8 @@ class MainPage:
     def show_file_menu(self):
         menu = Menu(self.root, tearoff=0)
         menu.add_command(label="DICOM Folder", command=self.input_button_click)
-        menu.add_command(label="Puncture Planned Coordinate Data", command=self.input_plan_coor_data)
-        menu.add_command(label="Select Real Time CSV", command=self.select_realtime_csv)
+        menu.add_command(label="Puncture Planned Route CSV", command=self.input_plan_coor_data)
+        menu.add_command(label="Puncture Real-Time Route CSV", command=self.select_realtime_csv)
         menu.post(self.root.winfo_pointerx(), self.root.winfo_pointery())
 
     def select_realtime_csv(self):
@@ -285,11 +283,11 @@ class MainPage:
         if self.IsSelectedItem == 0:
             return
         try:
-            if num == 1:
+            if num == 0:
                 image_2d = self.volume3d[:, :, self.Z]
-            elif num == 2:
+            elif num == 1:
                 image_2d = np.flipud(np.rot90(self.volume3d[:, self.Y, :]))
-            elif num == 3:
+            elif num == 2:
                 image_2d = np.flipud(np.rot90(self.volume3d[self.X, :, :]))
             else:
                 image_2d = np.zeros((512, 512), dtype=np.int16)
