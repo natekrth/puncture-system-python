@@ -1,3 +1,9 @@
+# Installation the application
+1. Open terminal/command prompt
+2. Clone the application from Github
+```
+git clonne https://github.com/natekrth/puncture-system-python.git
+```
 ## Creating Python virtualenv in Windows
 
 Prerequisite
@@ -51,3 +57,21 @@ source ./venv/bin/activate
 ```
 pip install -r requirements.txt
 ```
+
+# Run the application
+1. Open terminal/command prompt  
+2. Go to the directory where main.py is in
+```
+cd puncutre-system-python
+```
+3. Run the application
+- For Windows
+```
+python main.py
+```
+- For MacOS
+```
+python3 main.py
+```
+
+# 
