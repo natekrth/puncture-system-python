@@ -1,14 +1,63 @@
 import sys
 import os
 import numpy as np
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QToolBar, QAction, QWidget, QSlider, QLabel, QSplitter, QGraphicsView, QGraphicsScene, QHBoxLayout, QGridLayout, QSizePolicy, QMenu, QFileDialog, QListWidget, QListWidgetItem, QGraphicsPixmapItem
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QColor, QPixmap, QImage
+import pydicom as dicom
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QToolBar, QAction, QWidget, QSlider, QLabel, QSplitter, QGraphicsView, QGraphicsScene, QHBoxLayout, QGridLayout, QSizePolicy, QMenu, QFileDialog, QListWidget, QListWidgetItem
+from PyQt5.QtCore import Qt, QLineF, QRectF
+from PyQt5.QtGui import QImage, QPixmap, QColor, QPen
+import shutil
 
+
+class Vector3D:
+    def __init__(self, x, y, z):
+        self.x = x
+        self.y = y
+        self.z = z
+
+class Matrix3D:
+    def __init__(self, x1=0, x2=0, x3=0, y1=0, y2=0, y3=0, z1=0, z2=0, z3=0):
+        self.x1 = x1
+        self.x2 = x2
+        self.x3 = x3
+        self.y1 = y1
+        self.y2 = y2
+        self.y3 = y3
+        self.z1 = z1
+        self.z2 = z2
+        self.z3 = z3
+        
 class PictureInfo:
     def __init__(self, file_name):
         self.file_name = file_name
         self.image_data = None
+
+class AxisWidget(QGraphicsView):
+    def __init__(self, parent=None, plane='XY'):
+        super().__init__(parent)
+        self.setScene(QGraphicsScene(self))
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setBackgroundBrush(QColor(Qt.transparent))
+        self.setStyleSheet("background: transparent")
+
+        if plane == 'XY':
+            self.pen_x = QPen(QColor(Qt.magenta))
+            self.pen_y = QPen(QColor(Qt.yellow))
+        elif plane == 'YZ':
+            self.pen_x = QPen(QColor(Qt.cyan))
+            self.pen_y = QPen(QColor(Qt.magenta))
+        elif plane == 'XZ':
+            self.pen_x = QPen(QColor(Qt.cyan))
+            self.pen_y = QPen(QColor(Qt.yellow))
+
+        self.x_axis = None
+        self.y_axis = None
+
+    def update_axes(self, x, y, width, height):
+        self.scene().clear()  # Clear the scene before drawing the new axes
+        self.x_axis = self.scene().addLine(QLineF(0, y, width, y), self.pen_x)
+        self.y_axis = self.scene().addLine(QLineF(x, 0, x, height), self.pen_y)
+
 
 class MainPage(QMainWindow):
     def __init__(self):
@@ -23,8 +72,25 @@ class MainPage(QMainWindow):
         self.Y = 256
         self.Z = 256
 
-        self.MaxCTvalue = -32768
-        self.CT_Ajust = -1024  # Example value, adjust accordingly
+        self.x_size = 512
+        self.y_size = 512
+        self.z_size = 512
+        
+        self.thetaX = 0
+        self.thetaY = 0
+        self.thetaZ = 0
+        
+        self.CenterPoint = Vector3D(0, 0, 0)
+        
+        self.NeedleMatrix3D = np.zeros((512, 512, 512), dtype=np.int16)
+        self.NowMatrix3D = np.zeros((512, 512, 512), dtype=np.int16)
+        
+        self.IsSelectedItem = 0   
+        self.y_end = 512
+        self.ImageStride = 512 * 2
+        self.ImagePixelSize = 512 * 512 * 2
+        self.MaxCTvalue = 0
+        self.CT_Ajust = -1000  # Example value, adjust accordingly
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -54,7 +120,7 @@ class MainPage(QMainWindow):
         self.toolbar.addAction(file_action)
 
         load_action = QAction("Load", self)
-        load_action.triggered.connect(self.input_button_click)
+        load_action.triggered.connect(self.btnLoadPictures_Click)
         self.toolbar.addAction(load_action)
 
         add_action = QAction("Add", self)
@@ -68,9 +134,11 @@ class MainPage(QMainWindow):
         self.toolbar.addAction(exchange_action)
 
         zoom_in_action = QAction("ZoomIn", self)
+        zoom_in_action.triggered.connect(self.zoom_in)
         self.toolbar.addAction(zoom_in_action)
 
         zoom_out_action = QAction("ZoomOut", self)
+        zoom_out_action.triggered.connect(self.zoom_out)
         self.toolbar.addAction(zoom_out_action)
 
         self.load_pictures_action = QAction("Load Pictures", self)
@@ -119,11 +187,13 @@ class MainPage(QMainWindow):
     def slider_changed(self, value):
         sender = self.sender()
         if sender.objectName() == "X Value":
-            self.X = value
-        elif sender.objectName() == "Y Value":
             self.Y = value
+        elif sender.objectName() == "Y Value":
+            self.X = value
         elif sender.objectName() == "Z Value":
-            self.Z = value
+            self.Z = 400 - value
+        self.update_images()
+        self.update_axes()
         print(f"Slider changed: {sender.objectName()} to {value}")
 
     def init_main_view(self):
@@ -138,9 +208,9 @@ class MainPage(QMainWindow):
     def init_panels(self):
         # Add panels to the grid layout
         panel1 = self.create_panel("3D")
-        panel2 = self.create_panel("XY-Plane")
-        panel3 = self.create_panel("YZ-Plane")
-        panel4 = self.create_panel("XZ-Plane")
+        panel2 = self.create_panel("XY")
+        panel3 = self.create_panel("YZ")
+        panel4 = self.create_panel("XZ")  # Placeholder for 3D view if needed
 
         self.main_view_layout.addWidget(panel1, 0, 0)
         self.main_view_layout.addWidget(panel2, 0, 1)
@@ -148,15 +218,33 @@ class MainPage(QMainWindow):
         self.main_view_layout.addWidget(panel4, 1, 1)
 
         self.panels.extend([panel1, panel2, panel3, panel4])
+        
+        # Add AxisWidget on top of panels
+        self.axis_widgets = []
+        planes = ['3D', 'XY', 'YZ', 'XZ']
+        for i, (panel, plane) in enumerate(zip(self.panels, planes)):
+            if plane != '3D':
+                if plane == 'XY':
+                    axis_widget = AxisWidget(plane=plane)
+                    self.axis_widgets.append(axis_widget)
+                    self.main_view_layout.addWidget(axis_widget, 0, 1)
+                axis_widget = AxisWidget(plane=plane)
+                self.axis_widgets.append(axis_widget)
+                self.main_view_layout.addWidget(axis_widget, i // 2, i % 2)
 
     def create_panel(self, label_text):
         panel = QWidget()
+        panel.setMinimumSize(512, 512)
+        panel.setMaximumSize(512, 512)  # This line ensures the initial size is 512x512
+        panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)  # Allow expanding
+
         layout = QVBoxLayout(panel)
         layout.setSpacing(0)  # Remove spacing within the panel
         layout.setContentsMargins(0, 0, 0, 0)  # Remove margins within the panel
 
         scene = QGraphicsScene()
         view = QGraphicsView(scene)
+        view.setBackgroundBrush(QColor(Qt.black))  # Set the background to black
         view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -164,12 +252,28 @@ class MainPage(QMainWindow):
 
         label = QLabel(label_text)
         label.setAlignment(Qt.AlignCenter)
-        label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        label.setFixedSize(100, 40)  # Adjust the size as needed
         scene.addWidget(label)
 
         panel.scene = scene
         panel.view = view
+        panel.scale_factor = 1.0  # Add a scale factor attribute to the panel
+
+        def resizeEvent(event):
+            size = panel.size()
+            aspect_ratio = 1  # Aspect ratio of 1:1
+            if size.width() / size.height() > aspect_ratio:
+                new_width = int(size.height() * aspect_ratio)
+                panel.setFixedSize(new_width, size.height())
+            else:
+                new_height = int(size.width() / aspect_ratio)
+                panel.setFixedSize(size.width(), new_height)
+            self.update_axes()
+
+        panel.resizeEvent = resizeEvent
+
         return panel
+
 
     def toggle_sidebar(self):
         if self.sidebar.isVisible():
@@ -200,139 +304,170 @@ class MainPage(QMainWindow):
     def input_button_click(self):
         options = QFileDialog.Options()
         options |= QFileDialog.ReadOnly
-        file, _ = QFileDialog.getOpenFileName(self, "Select a RAW file", "", "RAW Files (*.raw);;All Files (*)", options=options)
-        if not file:
+        folder = QFileDialog.getExistingDirectory(self, "Select a Folder", options=options)
+        if not folder:
             return
 
-        with open(file, 'rb') as f:
-            buffer = f.read()
+        self.load_folder(folder)
 
-        bytes_array = np.frombuffer(buffer, dtype=np.uint8)
-        z_size = len(buffer) // (512 * 512 * 2)
-        image_data = np.zeros((512, 512, z_size), dtype=np.int16)
-
-        max_ct_value = -32768
-        for k in range(z_size):
-            for j in range(512):
-                for i in range(512):
-                    idx = k * 512 * 512 * 2 + j * 512 * 2 + i * 2
-                    s = int(bytes_array[idx]) * 256 + int(bytes_array[idx + 1])
-                    if s > 32767:
-                        s -= 65536
-                    max_ct_value = max(max_ct_value, s)
-                    image_data[i, j, k] = s
-
-        picture_info = PictureInfo(file)
-        picture_info.image_data = image_data
-        self.dataList.append(picture_info)
-
-        item = QListWidgetItem(os.path.basename(file))  # Display only the file name
+    def load_folder(self, folder):
+        # Get the folder name
+        folder_name = os.path.basename(folder)
+        
+        # Define the destination path in the current working directory
+        destination = os.path.join(os.getcwd()+"/dicom-folder", folder_name)
+        # Copy the entire folder to the destination
+        if not os.path.exists(destination):
+            shutil.copytree(folder, destination)
+        
+        # Save the folder path in dataList
+        self.dataList.append(destination)
+        
+        # Update the list view with the folder name
+        item = QListWidgetItem(folder_name)  # Display only the folder name
         self.list_view.addItem(item)
 
-        print("File loaded:", os.path.basename(file))
-        print("Image data shape:", image_data.shape)
-
     def list_view_item_click(self, item):
-        for pic_info in self.dataList:
-            if os.path.basename(pic_info.file_name) == item.text():
-                self.selectedItem = pic_info
-                break
-
+        self.selectedItem = item.text()
+        
         if self.selectedItem:
-            x_size, y_size, z_size = self.selectedItem.image_data.shape
-            center_point = {'x': x_size // 2, 'y': y_size // 2, 'z': z_size // 2}
-            print(f"Selected Item: {os.path.basename(self.selectedItem.file_name)}")
-            print(f"Center Point: {center_point}")
+            self.IsSelectedItem = 1
+            print(f"Selected Item: {self.selectedItem}")
+            self.load_dicom_images(self.selectedItem)  # Load the DICOM images
+            # self.update_images()
 
-            self.display_images(self.selectedItem.image_data)
+    def btnLoadPictures_Click(self):
+        if self.IsSelectedItem == 0:
+            return
+        for num, pa in enumerate(self.panels):
+            self.load_panel_image(pa, num)
 
-    def display_images(self, image_data):
-        # Assuming the slices are along the Z-axis
-        xy_slice = self.make_2d_array_xy(image_data, self.Z)
-        xz_slice = self.make_2d_array_xz(image_data)
-        yz_slice = self.make_2d_array_yz(image_data)
-        rendering_slice = self.make_2d_array_rendering(image_data)
-
-        self.update_panel_image(self.panels[0], rendering_slice)  # 3D view placeholder
-        self.update_panel_image(self.panels[1], xy_slice)
-        self.update_panel_image(self.panels[2], yz_slice)
-        self.update_panel_image(self.panels[3], xz_slice)
+    def load_panel_image(self, pa, num):
+        if self.IsSelectedItem == 0:
+            return
+        try:
+            if num == 1:  # Axial view XY
+                image_2d = self.volume3d[:, :, self.Z]
+            elif num == 2:  # Sagittal view YZ 
+                image_2d = np.flipud(np.rot90(self.volume3d[:, self.Y, :]))
+            elif num == 3:  # Coronal view XZ
+                image_2d = np.flipud(np.rot90(self.volume3d[self.X, :, :]))
+            else:
+                image_2d = np.zeros((512, 512), dtype=np.int16)  # Placeholder for the 3D view
+        except IndexError:
+            image_2d = np.zeros((512, 512), dtype=np.int16)  # Set the panel to black screen in case of error
+            
+        self.update_panel_image(pa, image_2d)
 
     def update_panel_image(self, panel, image_data):
         image = self.make_2d_image(image_data)
         pixmap = QPixmap.fromImage(image)
-
         panel.scene.clear()
         panel.scene.addPixmap(pixmap)
+        panel.view.setScene(panel.scene)
+        panel.view.setTransform(panel.view.transform().scale(panel.scale_factor, panel.scale_factor))  # Apply scaling
 
     def load_pictures(self):
-        if self.selectedItem is None:
-            return
+        # if self.selectedItem is None:
+        #     return
         self.display_images(self.selectedItem.image_data)
 
-    def make_2d_array_yz(self, Im):  # Y-Z plane
-        vs = np.zeros((512, 512), dtype=np.int16)
-        z_size = Im.shape[2]
-        for j in range(512):
-            for k in range(min(512, z_size)):
-                kk = abs(k - z_size) - 1
-                vs[j, kk] = Im[self.X, j, k]
-        return vs
-
-    def make_2d_array_xz(self, Im):  # X-Z plane
-        vs = np.zeros((512, 512), dtype=np.int16)
-        z_size = Im.shape[2]
-        for i in range(512):
-            for k in range(min(512, z_size)):
-                kk = abs(k - z_size) - 1
-                vs[i, kk] = Im[i, self.Y, k]
-        return vs
-
-    def make_2d_array_xy(self, Im, z):  # X-Y plane
-        vs = np.zeros((512, 512), dtype=np.int16)
-        z_size = Im.shape[2]
-        ZZ = abs(z - z_size) - 1
-        if ZZ >= z_size:  # Ensure ZZ is within bounds
-            ZZ = z_size - 1
-        for i in range(512):
-            for j in range(512):
-                vs[i, j] = Im[i, j, ZZ]
-        return vs
-
-    def make_2d_array_rendering(self, Im):  # Maximum intensity projection
-        vs = np.zeros((512, 512), dtype=np.int16)
-        z_size = Im.shape[2]
-        for i in range(512):
-            for j in range(512):
-                vs[i, j] = self.max_intensity(Im, i, j, z_size)
-        return vs
-
-    def max_intensity(self, v, I, J, z_size):
-        M = self.CT_Ajust
-        for k in range(z_size):
-            _M = v[I, J, k]
-            if _M > M:
-                M = _M
-                if M == self.MaxCTvalue:
-                    return M
-        return M
-
-    def make_2d_image(self, image_2d):  # Create QImage from 2D array
-        image_2d = ((image_2d - image_2d.min()) / (image_2d.max() - image_2d.min()) * 255).astype(np.uint8)
-        image_2d = np.rot90(image_2d, k=-1)  # Rotate image by 90 degrees clockwise
-        height, width = image_2d.shape
-        image_2d_bytes = image_2d.tobytes()
+    def make_2d_image(self, image_2d):
+        # Normalize the image data
+        normalized_image = ((image_2d - image_2d.min()) / (image_2d.max() - image_2d.min()) * 255).astype(np.uint8)
+        
+        # Set the background to black where pixel values are above a certain threshold (e.g., 250)
+        threshold = 250
+        background_mask = normalized_image > threshold
+        normalized_image[background_mask] = 0
+        
+        # Create QImage
+        height, width = normalized_image.shape
+        image_2d_bytes = normalized_image.tobytes()
         image = QImage(image_2d_bytes, width, height, QImage.Format_Grayscale8)
         return image
 
-    def noise_reduction(self, s):  # Convert CT value to pixel value
-        s = self.CT_Ajust if s <= self.CT_Ajust else s
-        pixel = (s - self.CT_Ajust) * 255 / (self.MaxCTvalue - self.CT_Ajust)
-        return np.uint8(pixel)
+    def get_image_position(slice):
+        return slice.ImagePositionPatient[2]
+
+    def load_dicom_images(self, folder_name):
+        path = "./dicom-folder/" + folder_name
+        ct_images = os.listdir(path)
+        slices = [dicom.read_file(path + '/' + s, force=True) for s in ct_images]
+        slices = sorted(slices, key=lambda x: x.ImagePositionPatient[2], reverse=True)
+
+        pixel_spacing = slices[0].PixelSpacing
+        slices_thickness = slices[0].SliceThickness
+
+        axial_aspect_ratio = pixel_spacing[1] / pixel_spacing[0]
+        sagittal_aspect_ratio = pixel_spacing[1] / slices_thickness
+        coronal_aspect_ratio = slices_thickness / pixel_spacing[0]
+
+        img_shape = list(slices[0].pixel_array.shape)
+        img_shape.append(len(slices))
+        self.volume3d = np.zeros(img_shape)
+
+        for i, s in enumerate(slices):
+            array2D = s.pixel_array
+            self.volume3d[:, :, i] = array2D
+
+        self.X = img_shape[0] // 2
+        self.Y = img_shape[1] // 2
+        self.Z = img_shape[2] // 2
+        print(self.X)
+        print("Y", self.Y)
+        print(self.Z)
 
     def show_add_menu(self):
         print("Show add menu")
 
+    def update_images(self):
+        # if not self.selectedItem:
+        #     return
+
+        for num, pa in enumerate(self.panels):
+            self.load_panel_image(pa, num)
+
+    def zoom_in(self):
+        self.zoom(1.1)
+
+    def zoom_out(self):
+        self.zoom(0.9)
+
+    def zoom(self, factor):
+        for panel in self.panels:
+            panel.scale_factor *= factor
+            panel.view.setTransform(panel.view.transform().scale(factor, factor))
+            self.update_panel_image(panel, self.get_current_image_data(panel))
+
+    def get_current_image_data(self, panel):
+        if panel == self.panels[0]:  # Axial view XY
+            return self.volume3d[:, :, self.Z]
+        elif panel == self.panels[1]:  # Sagittal view YZ
+            return np.flipud(np.rot90(self.volume3d[:, self.Y, :]))
+        elif panel == self.panels[2]:  # Coronal view XZ
+            return np.flipud(np.rot90(self.volume3d[self.X, :, :]))
+        else:
+            return np.zeros((512, 512), dtype=np.int16)  # Placeholder for the 3D view
+
+    def update_axes(self):
+        for panel, axis_widget in zip(self.panels, self.axis_widgets):
+            width = panel.view.viewport().width()
+            height = panel.view.viewport().height()
+            if panel == self.panels[1]:  # XY panel
+                x, y = self.Y, self.X
+                axis_widget.update_axes(x, y, width, height)
+            elif panel == self.panels[2]:  # YZ panel
+                x, y = self.X, self.Z
+                axis_widget.update_axes(x, y, width, height)
+            elif panel == self.panels[3]:  # XZ panel
+                x, y = self.Y, self.Z
+                axis_widget.update_axes(x, y, width, height)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.update_axes()
+        
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     main_window = MainPage()
