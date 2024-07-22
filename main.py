@@ -116,8 +116,8 @@ class MainPage:
         self.add_slider(sliders_frame, "Y Value", 512, 256, lambda value: self.slider_changed("Y Value", value))
         self.add_slider(sliders_frame, "Z Value", 512, 256, lambda value: self.slider_changed("Z Value", value))
         self.add_slider(sliders_frame, "X Rotation", 180, 90, lambda value: self.slider_changed("X Rotation", value))
-        self.add_slider(sliders_frame, "Y Rotation", 360, 90, lambda value: self.slider_changed("Y Rotation", value))
-        self.add_slider(sliders_frame, "Z Rotation", 360, 90, lambda value: self.slider_changed("Z Rotation", value))
+        self.add_slider(sliders_frame, "Y Rotation", 360, 180, lambda value: self.slider_changed("Y Rotation", value))
+        self.add_slider(sliders_frame, "Z Rotation", 360, 180, lambda value: self.slider_changed("Z Rotation", value))
 
     def add_slider(self, parent, label_text, maximum, initial_value, command):
         label = Label(parent, text=label_text)
@@ -459,7 +459,7 @@ class MainPage:
         new_volumn3d = np.flipud(np.rollaxis(volume3d, 2))
         self.volume = scene.visuals.Volume(new_volumn3d, parent=self.view.scene, threshold=0.225)
 
-        self.view.camera = scene.cameras.TurntableCamera(parent=self.view.scene, fov=60, elevation=90, azimuth=270, roll=90)
+        self.view.camera = scene.cameras.TurntableCamera(parent=self.view.scene, fov=60, elevation=90, azimuth=180, roll=180)
         
         self.view.camera.elevation_range = (0, 180)
         self.view.camera.azimuth_range = (None, None)
