@@ -1,5 +1,4 @@
 build/
 dist/
-p*
 .DS_Store
 *.raw
