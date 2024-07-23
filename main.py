@@ -154,7 +154,7 @@ class MainPage:
         self.update_images()
         self.draw_realtime_line()  # Redraw the real-time line on the XY-plane
         self.update_realtime_line_vispy()  # Redraw the real-time line in 3D
-        print(f"Slider changed: {name} to {int(value)}")
+        # print(f"Slider changed: {name} to {int(value)}") # for debugging purposes
 
     def init_main_view(self):
         self.main_view_frame = Frame(self.root)
@@ -345,7 +345,7 @@ class MainPage:
         self.X = img_shape[0] // 2
         self.Y = img_shape[1] // 2
         self.Z = img_shape[2] // 2
-        print("X,Y,Z: ", self.X_init, self.Y_init, self.Z_init)
+        # print("X,Y,Z: ", self.X_init, self.Y_init, self.Z_init) # for debugging purposes
 
     def make_2d_image(self, image_2d):
         if image_2d.max() - image_2d.min() != 0:
@@ -408,7 +408,7 @@ class MainPage:
 
         self.point_start = points[0]
         self.point_end = points[1]
-        print(self.point_start, self.point_end)
+        # print(self.point_start, self.point_end) # for debugging purposes
         
         self.draw_needle_plan()
         self.draw_needle_plan_vispy()
@@ -532,7 +532,7 @@ class MainPage:
                 for row in new_rows:
                     x, y, z = map(float, row)
                     self.realtime_points.append([x, y, z])
-                    print(self.realtime_points)
+                    # print(self.realtime_points) # for debugging purposes
                     self.draw_realtime_line()
 
             time.sleep(1)  # Check for new data every second
