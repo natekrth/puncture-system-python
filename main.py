@@ -28,7 +28,7 @@ class NeedleInfo:
 class MainPage:
     def __init__(self, root):
         self.root = root
-        self.root.title("Puncture System")
+        self.root.title("CT-Guided Puncture Assistance System")
         self.root.geometry("1200x800")
 
         self.panels = []
