@@ -2,21 +2,20 @@ import csv
 import time
 import random
 
-def generate_random_values():
-    x = int(random.uniform(0, 512))
-    y = int(random.uniform(0, 512))
-    z = int(random.uniform(0, 166))
-    return x, y, z
+def generate_random_values(start_y, end_y, step_y):
+    x = 256
+    z = 83
+    return x, z
 
-def write_to_csv(filename):
-    # save = 10
-    while True:
-        x, y, z = generate_random_values()
-        # save += 10
+def write_to_csv(filename, start_y, end_y, step_y):
+    y = start_y
+    while y <= end_y:
+        x, z = generate_random_values(start_y, end_y, step_y)
         with open(filename, mode='a', newline='') as file:
             writer = csv.writer(file)
             writer.writerow([x, y, z])
         print(f'Written values: x={x}, y={y}, z={z}')
+        y += step_y
         time.sleep(5)
 
 if __name__ == "__main__":
@@ -25,4 +24,4 @@ if __name__ == "__main__":
     with open(filename, mode='w', newline='') as file:
         pass
 
-    write_to_csv(filename)
+    write_to_csv(filename, start_y=179, end_y=320, step_y=10)
