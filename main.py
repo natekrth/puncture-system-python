@@ -143,6 +143,7 @@ class MainPage:
                 self.Z = 1234
             else:
                 self.Z = -int(int(value) - low_end)
+                # print(-self.Z)
                 if self.Z == 0:
                     self.Z = -1
         elif name == "X Rotation":
