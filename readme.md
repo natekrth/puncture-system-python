@@ -1,5 +1,5 @@
 # CT-Guided Puncture Assistance System
-
+![mainscreen](https://github.com/natekrth/puncture-system-python/blob/main/mainscreen.png?raw=true)
 # Installation the application
 1. Open terminal/command prompt
 2. Clone the application from Github
